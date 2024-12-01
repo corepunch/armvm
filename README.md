@@ -69,7 +69,7 @@ int main() {
     return 0;
 }
 ```
-#API
+## API
 ```
 armvm_init(armvm_t *vm)
 Initialize the ARM virtual machine.
@@ -86,6 +86,7 @@ Execute the ARM32 code within the virtual machine.
 armvm_cleanup(armvm_t *vm)
 Cleanup the virtual machine resources after execution.
 ```
-License
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
+## License
+
+This project is licensed under the **MIT License**. See the LICENSE file for more details.
