@@ -4,7 +4,7 @@
 
 ## Features
 
-- **ARMv7 Compiler**: Compile ARM assembly code (ARM32) using Xcode.
+- **ARMv7 Compiler**: Compile ARM assembly code
 - **ARM32 Virtual Machine**: Emulate ARM32 code execution on any host architecture.
 - **External Functionality**: The VM exposes slots for user-provided functions like `printf` and potentially others.
 - **Cross-Architecture Support**: Run ARM32 code on non-ARM architectures without the need for hardware support.
