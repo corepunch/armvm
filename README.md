@@ -182,7 +182,7 @@ The `armvm` executable is an assembler that compiles ARM assembly files to bytec
 - `_d` file: Debug symbols (e.g., `output.bin_d`)
 
 The compiled bytecode includes:
-- Program header with magic number (0x4143524F / "ACRO")
+- Program header with magic number (0x4143524F / "ORCA" in little-endian)
 - Executable ARM32 instructions
 - Symbol table with global labels and their positions
 
