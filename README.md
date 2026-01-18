@@ -164,23 +164,51 @@ gcc -o armvm armvm.c compiler.c armcomp.c expr.c memory.c libpvm.c -lm
 clang -o armvm armvm.c compiler.c armcomp.c expr.c memory.c libpvm.c -lm
 ```
 
-## Usage Example
+## Command-Line Usage
+
+The `armvm` executable is an assembler that compiles ARM assembly files to bytecode:
+
+```bash
+# Compile assembly to bytecode
+./armvm -o output.bin input.s
+
+# Compile multiple files
+./armvm -o program.bin file1.s file2.s file3.s
+```
+
+**Output Format:**
+- `.bin` file: Contains compiled bytecode with header
+- `_d` file: Debug symbols (e.g., `output.bin_d`)
+
+The compiled bytecode includes:
+- Program header with magic number (0x4143524F / "ORCA")
+- Executable ARM32 instructions
+- Symbol table with global labels and their positions
+
+## Programmatic Usage
+
+### Using the VM in Your Application
 
 ```c
 #include "vm.h"
 
+// Helper macro to convert register value to memory address
+#define VMA(A) ((void *)(vm->memory + vm->r[A]))
+
 // Implement syscall handler
 DWORD my_syscall(LPVM vm, DWORD call_id) {
     switch (call_id) {
-        case 1: return strlen((char*)VMA(0));  // strlen
-        case 2: return malloc_wrapper(vm);      // malloc
+        case 1: // strlen
+            return strlen((char*)VMA(0));
+        case 2: // puts  
+            return puts((char*)VMA(0));
         // Add more syscalls as needed
         default: return 0;
     }
 }
 
 int main() {
-    // Load compiled assembly
+    // Load compiled assembly bytecode
     FILE *fp = fopen("program.bin", "rb");
     fseek(fp, 0, SEEK_END);
     DWORD size = ftell(fp);
@@ -189,11 +217,13 @@ int main() {
     fread(program, size, 1, fp);
     fclose(fp);
     
-    // Create and run VM
+    // Create VM with 64KB stack and heap
     LPVM vm = vm_create(my_syscall, 64*1024, 64*1024, program, size);
-    execute(vm, 0);  // Execute from entry point
     
-    // Get result from r0
+    // Execute from entry point (usually offset 0)
+    execute(vm, 0);
+    
+    // Get return value from r0
     DWORD result = vm->r[0];
     
     // Cleanup
@@ -202,6 +232,24 @@ int main() {
     
     return result;
 }
+```
+
+### Complete Example: Compile and Run
+
+```bash
+# 1. Write ARM assembly
+cat > hello.s << 'EOF'
+.globl _main
+_main:
+    mov r0, #42
+    bx lr
+EOF
+
+# 2. Compile to bytecode
+./armvm -o hello.bin hello.s
+
+# 3. Run with your VM wrapper (you need to implement this)
+./your_vm_runner hello.bin
 ```
 
 ## Architecture Details
