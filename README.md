@@ -93,13 +93,14 @@ adr r0, label            @ Load address of label
 `mul`, `mla`, `umull`, `umlal`, `smull`, `smlal`
 
 **Memory Access:**
-`ldr`, `str`, `ldrb`, `strb`, `ldrsb`, `ldrh`, `strh`, `ldrsh`, `ldm`, `stm`
+`ldr`, `ldrb`, `ldrh`, `ldrsb`, `ldrsh`, `str`, `strb`, `strh`, `ldm`, `stm`
+(Note: Byte/halfword/signed variants are parsed as suffixes to LDR/STR base instructions)
 
 **Branch:**
 `b`, `bl`, `bx`
 
-**Shifts (as MOV variants):**
-`lsl`, `lsr`, `asr`, `ror`
+**Shift Instructions:**
+`lsl`, `lsr`, `asr`, `ror` (converted internally to MOV with shift operands)
 
 **Condition Codes:**
 `eq`, `ne`, `cs/hs`, `cc/lo`, `mi`, `pl`, `vs`, `vc`, `hi`, `ls`, `ge`, `lt`, `gt`, `le`, `al`
@@ -181,7 +182,7 @@ The `armvm` executable is an assembler that compiles ARM assembly files to bytec
 - `_d` file: Debug symbols (e.g., `output.bin_d`)
 
 The compiled bytecode includes:
-- Program header with magic number (0x4143524F / "ORCA")
+- Program header with magic number (0x4143524F / "ACRO")
 - Executable ARM32 instructions
 - Symbol table with global labels and their positions
 
