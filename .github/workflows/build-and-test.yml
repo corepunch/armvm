@@ -1,0 +1,31 @@
+name: Build and Test
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build and Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Build armvm-compiler
+      run: make
+    
+    - name: Run tests
+      run: make test
+    
+    - name: Verify executable exists
+      run: |
+        ls -lh armvm-compiler
+        ./armvm-compiler 2>&1 | head -5 || true
