@@ -136,7 +136,7 @@ BOOL skip_comma(LPCSTR *line) {
 
 BOOL read_register(LPCSTR *line, BYTE *out) {
     skip_space(line);
-    if (tolower(**line) == 'r' && isnumber(*((*line)+1))) {
+    if (tolower(**line) == 'r' && isdigit(*((*line)+1))) {
         *out = strtol((*line)+1, (LPSTR *)line, 10);
         skip_comma(line);
         return 1;
@@ -162,7 +162,7 @@ BOOL read_register(LPCSTR *line, BYTE *out) {
 
 BOOL read_label(LPCSTR *line, BYTE *out) {
     skip_space(line);
-    if (tolower(**line) == 'r' && isnumber(*((*line)+1))) {
+    if (tolower(**line) == 'r' && isdigit(*((*line)+1))) {
         *out = strtol((*line)+1, (LPSTR *)line, 10);
         skip_comma(line);
         return 1;
@@ -179,7 +179,7 @@ BOOL read_number(LPCSTR *line, DWORD *out, BOOL *negative) {
     if (negative) {
         *negative = read_char(line, '-');
     }
-    if (isnumber(**line)) {
+    if (isdigit(**line)) {
         *out = (DWORD)strtol(*line, (LPSTR *)line, 10);
         skip_comma(line);
         return 1;
