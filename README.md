@@ -151,30 +151,50 @@ To generate assembly:
 
 ## Building
 
-The project uses Xcode for development but can be built with standard C compilers:
+### Using Make (Recommended)
+
+The project includes a Makefile for easy compilation on Linux and Mac:
 
 ```bash
-# Using Xcode
-xcodebuild -project armvm.xcodeproj -scheme armvm
+# Build the compiler and VM (creates armvm-compiler executable)
+make
 
-# Using GCC/Clang directly
+# Clean build artifacts
+make clean
+
+# Build and run tests
+make test
+```
+
+### Using Xcode
+
+```bash
+xcodebuild -project armvm.xcodeproj -scheme armvm
+```
+
+### Manual Compilation
+
+You can also build directly with GCC or Clang:
+
+```bash
+# Using GCC
 cd armvm
-gcc -o armvm armvm.c compiler.c armcomp.c expr.c memory.c libpvm.c -lm
+gcc -o armvm-compiler armvm.c compiler.c armcomp.c expr.c memory.c libpvm.c -lm
 
 # Or with Clang
-clang -o armvm armvm.c compiler.c armcomp.c expr.c memory.c libpvm.c -lm
+clang -o armvm-compiler armvm.c compiler.c armcomp.c expr.c memory.c libpvm.c -lm
 ```
 
 ## Command-Line Usage
 
-The `armvm` executable is an assembler that compiles ARM assembly files to bytecode:
+The `armvm-compiler` executable is an assembler that compiles ARM assembly files to bytecode:
 
 ```bash
 # Compile assembly to bytecode
-./armvm -o output.bin input.s
+./armvm-compiler -o output.bin input.s
 
 # Compile multiple files
-./armvm -o program.bin file1.s file2.s file3.s
+./armvm-compiler -o program.bin file1.s file2.s file3.s
 ```
 
 **Output Format:**
@@ -247,7 +267,7 @@ _main:
 EOF
 
 # 2. Compile to bytecode
-./armvm -o hello.bin hello.s
+./armvm-compiler -o hello.bin hello.s
 
 # 3. Run with your VM wrapper (you need to implement this)
 ./your_vm_runner hello.bin
@@ -266,10 +286,13 @@ EOF
 
 ## Running Tests
 
-The project includes XCTest-based unit tests in the `armtest` directory:
+The project includes a C-based test suite in the `test/` directory:
 
 ```bash
-# Run tests with Xcode
+# Run tests using Make (recommended)
+make test
+
+# Run tests with Xcode (original Objective-C tests in armtest/)
 xcodebuild test -project armvm.xcodeproj -scheme armtest
 
 # Tests include:
@@ -278,6 +301,10 @@ xcodebuild test -project armvm.xcodeproj -scheme armtest
 # - Conditional execution
 # - Shifts and rotates
 # - Branch instructions
+# - Complex programs (linked lists, string operations, etc.)
+```
+
+The C test suite runs 10 core tests covering essential ARM VM functionality.
 # - Complex programs (linked lists, string operations, etc.)
 ```
 
