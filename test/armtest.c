@@ -125,8 +125,16 @@ void testADD() {
     ASSERT_EQUAL(test_program(code, 2), 8, "testADD");
 }
 
-// Note: testLinkedList and other file-based tests are commented out
-// because they require external test files that don't exist in the repo
+// Note: File-based tests from the original Objective-C test suite are commented out
+// because they require external assembly test files that don't exist in the repository:
+// - linked-list.s, linked-list2.s - Linked list traversal tests
+// - shifts.s, shifts2.s - Advanced shift operations tests  
+// - ldrsb.s - Load register signed byte test
+// - format.s - String formatting test
+// - modulo.s - Modulo operation test
+// - memcpy.s - Memory copy test
+// - snprintf.s - Safe printf test
+// These tests can be re-enabled if the assembly files are added to the repository.
 /*
 void testLinkedList() {
     ASSERT_EQUAL(run_program("linked-list.s"), 30, "testLinkedList");

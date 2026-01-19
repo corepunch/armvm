@@ -66,7 +66,11 @@ $(OBJDIR)/test_%.o: $(TESTDIR)/%.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -I$(SRCDIR) -c $< -o $@
 
 # Link test executable
-# Note: We compile test with all sources except compiler.c main is excluded via linker
+# Note: This uses -Dmain=_unused_main to rename the main() in compiler.c when compiling it
+# for tests, allowing the test suite's main() to be used instead. This is a simple workaround
+# to avoid having to refactor compiler.c. If compiler.c is refactored in the future to separate
+# test helper functions from main(), this approach should be updated to link test_program() and
+# run_program() from a separate object file.
 $(TEST_TARGET): $(TEST_OBJS) $(filter-out $(OBJDIR)/compiler.o,$(OBJS)) $(SRCDIR)/compiler.c | $(OBJDIR)
 	$(CC) $(TEST_OBJS) $(filter-out $(OBJDIR)/compiler.o,$(OBJS)) $(SRCDIR)/compiler.c -Dmain=_unused_main $(CFLAGS) $(LDFLAGS) -o $(TEST_TARGET)
 

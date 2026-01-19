@@ -305,8 +305,6 @@ xcodebuild test -project armvm.xcodeproj -scheme armtest
 ```
 
 The C test suite runs 10 core tests covering essential ARM VM functionality.
-# - Complex programs (linked lists, string operations, etc.)
-```
 
 ## License
 
