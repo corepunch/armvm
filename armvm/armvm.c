@@ -482,7 +482,7 @@ LPVM vm_create(VM_SysCall syscall, DWORD stack_size, DWORD heap_size,
     vm->heapsize = heap_size;
     vm->progsize = progsize;
     vm->syscall = syscall;
-    vm->r[SP_REG] = VM_STACK_SIZE + progsize;
+    vm->r[SP_REG] = stack_size + progsize;
     initialize_memory_manager(vm, vm->memory + stack_size + progsize, heap_size);
     return vm;
 }
