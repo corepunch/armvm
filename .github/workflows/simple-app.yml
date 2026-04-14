@@ -9,6 +9,8 @@ on:
 jobs:
   build-and-run:
     name: Build and run simple-app example
+    permissions:
+      contents: read
     # clang -arch armv7 cross-compilation is only supported on Apple platforms
     runs-on: macos-latest
 
