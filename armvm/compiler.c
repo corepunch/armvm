@@ -482,7 +482,7 @@ const AsmSyntax apple_asm_syntax = {
  *
  *   static const AsmDirective gnu_directives[] = {
  *       { ".global",  f_globl   },
- *       { ".balign",  f_p2align },
+ *       { ".p2align", f_p2align },
  *       { ".byte",    f_byte    },
  *       { ".short",   f_short   },
  *       { ".long",    f_long    },
