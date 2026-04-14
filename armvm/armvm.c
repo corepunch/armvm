@@ -1,5 +1,7 @@
 #include <assert.h>
 #include <memory.h>
+#include <stdlib.h>
+#include <string.h>
 #include "vm.h"
 
 #define REG_SIZE sizeof(DWORD)
@@ -461,4 +463,30 @@ void execute(LPVM vm, DWORD pc) {
         exec_instruction(vm);
         assert(vm->location != 0xffffffff);
     }
+}
+
+/* ---------------------------------------------------------------------------
+ * VM lifecycle - create and destroy a VM instance.
+ * These live here alongside execute() rather than in the compiler, because
+ * they are purely a runtime concern.
+ * --------------------------------------------------------------------------- */
+
+LPVM vm_create(VM_SysCall syscall, DWORD stack_size, DWORD heap_size,
+               BYTE *program, DWORD progsize) {
+    BYTE *memory = malloc(sizeof(struct VM) + stack_size + heap_size + progsize);
+    memset(memory, 0, sizeof(struct VM));
+    memcpy(memory + sizeof(struct VM), program, progsize);
+    LPVM vm = (LPVM)memory;
+    vm->memory = memory + sizeof(struct VM);
+    vm->stacksize = stack_size;
+    vm->heapsize = heap_size;
+    vm->progsize = progsize;
+    vm->syscall = syscall;
+    vm->r[SP_REG] = VM_STACK_SIZE + progsize;
+    initialize_memory_manager(vm, vm->memory + stack_size + progsize, heap_size);
+    return vm;
+}
+
+void vm_shutdown(LPVM vm) {
+    free(vm);
 }
