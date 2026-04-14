@@ -125,6 +125,27 @@ void testADD() {
     ASSERT_EQUAL(test_program(code, 2), 8, "testADD");
 }
 
+void testPopPC() {
+    // Regression test: loading into PC (r15) via LDM/pop must update vm->location
+    // so that "pop {pc}" acts as a function return (fixes exec_blockdatatransfer).
+    //
+    // Layout (each instruction 4 bytes):
+    //   offset 0:  push {lr}    - save outer lr (= progsize) on the stack
+    //   offset 4:  bl _calc     - lr = 8 (address of pop {pc}), jump to _calc
+    //   offset 8:  pop {pc}     - restore outer lr from stack, location = progsize -> terminate
+    //   _calc at offset 12:
+    //   offset 12: mov r0, #99
+    //   offset 16: bx lr        - return to pop {pc}
+    const char *code =
+    "push { lr }\n"     // save outer return address (progsize) on stack
+    "bl _calc\n"        // call _calc; lr = address of pop {pc} below
+    "pop { pc }\n"      // restore outer lr from stack -> VM terminates
+    "_calc:\n"
+    "mov r0, #99\n"     // set return value
+    "bx lr\n";          // return to pop {pc}
+    ASSERT_EQUAL(test_program(code, 0), 99, "testPopPC");
+}
+
 // Note: File-based tests from the original Objective-C test suite are commented out
 // because they require external assembly test files that don't exist in the repository:
 // - linked-list.s, linked-list2.s - Linked list traversal tests
@@ -188,6 +209,7 @@ int main() {
     testLDR();
     testLDR2();
     testADD();
+    testPopPC();
 
     // Print summary
     printf("\n=================\n");

@@ -25,13 +25,37 @@
 /* Helper: convert a VM register value (VM-relative address) to a host pointer */
 #define VMA(reg) ((void *)(vm->memory + vm->r[(reg)]))
 
+/* Total size of addressable VM memory */
+#define VM_MEM_SIZE(vm) ((vm)->progsize + (vm)->stacksize + (vm)->heapsize)
+
 /* ------------------------------------------------------------------ */
 /* Custom host functions exposed to the ARM VM via the syscall interface */
 /* ------------------------------------------------------------------ */
 
 /* Syscall 1 — print_string(const char *s) */
 static DWORD host_print_string(LPVM vm) {
-    printf("%s", (const char *)VMA(0));
+    DWORD offset = vm->r[0];
+    DWORD mem_size = VM_MEM_SIZE(vm);
+
+    /* Validate that the pointer is within the VM's addressable memory */
+    if (offset >= mem_size) {
+        fprintf(stderr, "print_string: pointer offset %u is out of bounds (max %u)\n",
+                offset, mem_size - 1);
+        return 0;
+    }
+
+    /* Find the NUL terminator within the remaining bytes */
+    const char *str = (const char *)vm->memory + offset;
+    DWORD max_len = mem_size - offset;
+    DWORD len = 0;
+    while (len < max_len && str[len] != '\0')
+        len++;
+    if (len == max_len) {
+        fprintf(stderr, "print_string: string is not NUL-terminated within VM memory\n");
+        return 0;
+    }
+
+    fwrite(str, 1, len, stdout);
     return 0;
 }
 
@@ -49,7 +73,9 @@ static DWORD syscall_handler(LPVM vm, DWORD call_id) {
         case 1: return host_print_string(vm);
         case 2: return host_add_numbers(vm);
         default:
-            fprintf(stderr, "Unknown syscall: %u\n", call_id);
+            fprintf(stderr, "Unknown syscall: %u — halting VM\n", call_id);
+            /* Advance location past the end of the program to stop execution */
+            vm->location = vm->progsize;
             return 0;
     }
 }
@@ -123,6 +149,15 @@ int main(int argc, char *argv[]) {
     char *src = read_file(argv[1]);
     if (!src)
         return 1;
+
+    /* Validate that the assembly defines a _main entry point.
+     * main_label defaults to 0, which is also a valid offset, so the only
+     * reliable way to detect a missing entry label is to inspect the source. */
+    if (!strstr(src, "_main:")) {
+        fprintf(stderr, "error: assembly source does not define a '_main:' label\n");
+        free(src);
+        return 1;
+    }
 
     /* Compile the assembly source into bytecode */
     FILE *fp = tmpfile();

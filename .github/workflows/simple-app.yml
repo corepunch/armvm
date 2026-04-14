@@ -15,14 +15,14 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Build armvm-compiler
-      run: make
+      - name: Build armvm-compiler
+        run: make
 
-    - name: Build simple-app example
-      run: make -C examples/simple-app
+      - name: Build simple-app example
+        run: make -C examples/simple-app
 
-    - name: Run simple-app example
-      run: make -C examples/simple-app run
+      - name: Run simple-app example
+        run: make -C examples/simple-app run
