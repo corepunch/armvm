@@ -53,9 +53,15 @@ typedef struct {
 
     /*
      * NULL-terminated table of directives recognised by this dialect.
-     * Directives not listed here are silently skipped with a warning.
+     * Directives not listed here are skipped with a warning.
      */
     const AsmDirective *directives;
 } AsmSyntax;
+
+/*
+ * Built-in Apple/Clang ARM assembly syntax dialect.
+ * Pass &apple_asm_syntax to compile_buffer() for the default dialect.
+ */
+extern const AsmSyntax apple_asm_syntax;
 
 #endif /* asm_syntax_h */
