@@ -5,6 +5,7 @@
 #include <assert.h>
 
 #include "vm.h"
+#include "asm_syntax.h"
 
 #define MAX_LABELS (1024 * 32)
 #define MAX_ASM_SYMBOLS (MAX_LABELS * 64)
@@ -65,7 +66,8 @@ SYMBOL symbols[MAX_SYMBOLS] = { 0 };
 #define OP_LINKRESULT (('r' << 8) | 'l')
 #define OP_PROGRAMCTR (('c' << 8) | 'p')
 
-BOOL ExtractLine(LPCSTR *text, LPSTR lineBuffer) {
+BOOL ExtractLine(const AsmSyntax *syntax, LPCSTR *text, LPSTR lineBuffer) {
+    assert(syntax && syntax->is_comment_char);
     DWORD i, j;
     BOOL write = 1;
     BOOL quotes = 0;
@@ -73,8 +75,7 @@ BOOL ExtractLine(LPCSTR *text, LPSTR lineBuffer) {
     if (**text == 0)
         return 0;
     for (i = 0, j = 0; i < MAX_LINE_LENGTH; i++) {
-        if ((*text)[i] == ';' && !quotes) write = 0;
-        if ((*text)[i] == '@' && !quotes) write = 0;
+        if (syntax->is_comment_char((*text)[i]) && !quotes) write = 0;
         if ((*text)[i] == 0 || (*text)[i] == '\n')
             break;
         if (isspace((*text)[i]) && j == 0) continue;
@@ -427,44 +428,89 @@ void f_indirect_symbol(FILE *fp, LPCSTR str) {
     add_symbol(fp, str);
 }
 
-struct _TAG {
-    LPCSTR name;
-    void (*proc)(FILE *fp, LPCSTR str);
+/*
+ * Apple/Clang ARM assembler syntax implementation.
+ *
+ * is_comment_char: ';' (end-of-line) and '@' (inline) are both comment chars.
+ *   GNU GAS (ARM) only uses '@'; NASM only uses ';'.
+ *
+ * apple_directives: directives emitted by Apple's assembler / LLVM/clang on
+ *   Darwin.  GNU GAS uses similar but not identical names (.global vs .globl,
+ *   .balign vs .p2align, etc.).  NASM uses a completely different directive
+ *   vocabulary.  To add a new dialect, build a separate AsmDirective table
+ *   and point a new AsmSyntax at it.
+ */
+static int apple_is_comment_char(char ch) {
+    return ch == ';' || ch == '@';
+}
+
+static const AsmDirective apple_directives[] = {
+    { ".zerofill",               f_zerofill },
+    { ".byte",                   f_byte },
+    { ".short",                  f_short },
+    { ".long",                   f_long },
+    { ".set",                    f_set },
+    { ".globl",                  f_globl },   /* GNU GAS uses ".global" */
+    { ".asciz",                  f_asciz },
+    { ".ascii",                  f_ascii },
+    { ".p2align",                f_p2align }, /* GNU GAS uses ".balign" */
+    { ".code",                   f_code },
+    { ".section",                f_section },
+    { ".space",                  f_space },
+    { ".build_version",          f_build_version }, /* Apple-specific */
+    { ".syntax",                 f_syntax },
+    { ".comm",                   f_comm },
+    { ".data_region",            f_data_region },    /* Apple-specific */
+    { ".indirect_symbol",        f_indirect_symbol },/* Apple-specific */
+    { ".end_data_region",        f_end_data_region },/* Apple-specific */
+    { ".subsections_via_symbols",f_subsections_via_symbols },/* Apple-specific */
+    /* debug info */
+    { ".loc",                    f_loc },
+    { ".file",                   f_file },
+    { NULL, NULL }
 };
 
-struct _TAG tags[] = {
-    { ".zerofill", f_zerofill },
-    { ".byte", f_byte },
-    { ".short", f_short },
-    { ".long", f_long },
-    { ".set", f_set },
-    { ".globl", f_globl },
-    { ".asciz", f_asciz },
-    { ".ascii", f_ascii },
-    { ".p2align", f_p2align },
-    { ".code", f_code },
-    { ".section", f_section },
-    { ".space", f_space },
-    { ".build_version", f_build_version },
-    { ".syntax", f_syntax },
-    { ".comm", f_comm },
-    { ".data_region", f_data_region },
-    { ".indirect_symbol", f_indirect_symbol },
-    { ".end_data_region", f_end_data_region },
-    { ".subsections_via_symbols", f_subsections_via_symbols },
-    // debug info
-    { ".loc", f_loc },
-    { ".file", f_file },
-    { NULL }
+const AsmSyntax apple_asm_syntax = {
+    "apple",
+    apple_is_comment_char,
+    apple_directives,
 };
 
-BOOL compile_buffer(FILE *fp, FILE *d_fp, LPCSTR filename, LPCSTR test) {
+/*
+ * To add GNU GAS syntax support, create a parallel implementation:
+ *
+ *   static int gnu_is_comment_char(char ch) { return ch == '@'; }
+ *
+ *   static const AsmDirective gnu_directives[] = {
+ *       { ".global",  f_globl   },
+ *       { ".p2align", f_p2align },
+ *       { ".byte",    f_byte    },
+ *       { ".short",   f_short   },
+ *       { ".long",    f_long    },
+ *       { ".asciz",   f_asciz   },
+ *       { ".ascii",   f_ascii   },
+ *       { ".comm",    f_comm    },
+ *       { ".section", f_section },
+ *       { ".space",   f_space   },
+ *       { NULL, NULL }
+ *   };
+ *
+ *   const AsmSyntax gnu_asm_syntax = {
+ *       "gnu",
+ *       gnu_is_comment_char,
+ *       gnu_directives,
+ *   };
+ */
+
+BOOL compile_buffer(FILE *fp, FILE *d_fp, LPCSTR filename, LPCSTR test,
+                    const AsmSyntax *syntax) {
+    assert(syntax && syntax->is_comment_char && syntax->directives);
     main_label = 0;
     DWORD startsym = cs.num_symbols;
     
     static char lineBuffer[MAX_LINE_LENGTH];
     LPCSTR txt = test;
-    while (ExtractLine(&txt, lineBuffer)) {
+    while (ExtractLine(syntax, &txt, lineBuffer)) {
         curfilepos = (DWORD)ftell(fp);
         curline++;
 
@@ -487,11 +533,11 @@ BOOL compile_buffer(FILE *fp, FILE *d_fp, LPCSTR filename, LPCSTR test) {
         
         if (*lineBuffer == '\0') continue;
         if (*lineBuffer == '.') {
-            for (struct _TAG *tag = tags; tag->name; tag++) {
-                if (strstr(lineBuffer, tag->name) == lineBuffer) {
-                    LPCSTR s = lineBuffer + strlen(tag->name);
+            for (const AsmDirective *dir = syntax->directives; dir->name; dir++) {
+                if (strstr(lineBuffer, dir->name) == lineBuffer) {
+                    LPCSTR s = lineBuffer + strlen(dir->name);
                     while (isspace(*s)) s++;
-                    tag->proc(fp, s);
+                    dir->handler(fp, s);
                     goto proceed;
                 }
             }
@@ -512,25 +558,6 @@ BOOL compile_buffer(FILE *fp, FILE *d_fp, LPCSTR filename, LPCSTR test) {
     cs.num_sets = 0;
     
     return 1;
-}
-
-LPVM vm_create(VM_SysCall syscall, DWORD stack_size, DWORD heap_size, BYTE *program, DWORD progsize) {
-    BYTE *memory = malloc(sizeof(struct VM) + stack_size + heap_size + progsize);
-    memset(memory, 0, sizeof(struct VM));
-    memcpy(memory + sizeof(struct VM), program, progsize);
-    LPVM vm = (LPVM)memory;
-    vm->memory = memory + sizeof(struct VM);
-    vm->stacksize = stack_size;
-    vm->heapsize = heap_size;
-    vm->progsize = progsize;
-    vm->syscall = syscall;
-    vm->r[SP_REG] = VM_STACK_SIZE + progsize;
-    initialize_memory_manager(vm, vm->memory + stack_size + progsize, heap_size);
-    return vm;
-}
-
-void vm_shutdown(LPVM vm) {
-    free(vm);
 }
 
 static void* extrect_input(FILE *input) {
@@ -600,7 +627,7 @@ int main(int argc, const char * argv[]) {
         test = extrect_input(input);
         
 
-        if (!compile_buffer(fp, d_fp, files[i], test)) {
+        if (!compile_buffer(fp, d_fp, files[i], test, &apple_asm_syntax)) {
             free(test);
             fclose(fp);
             remove(output);
@@ -735,7 +762,7 @@ DWORD test_program(LPCSTR code, DWORD r) {
     strcpy(symbols[4], "puts");
     strcpy(symbols[5], "snprintf");
 
-    if (!compile_buffer(fp, NULL, NULL, code)) {
+    if (!compile_buffer(fp, NULL, NULL, code, &apple_asm_syntax)) {
         printf("Failed to compile\n");
         return -1;
     }

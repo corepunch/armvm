@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "vm.h"
+#include "asm_syntax.h"
 
 /* Helper: convert a VM register value (VM-relative address) to a host pointer */
 #define VMA(reg) ((void *)(vm->memory + vm->r[(reg)]))
@@ -100,7 +101,8 @@ extern int main_label;
  * Compile an ARM assembly source string into bytecode written to fp.
  * Defined in compiler.c.
  */
-BOOL compile_buffer(FILE *fp, FILE *d_fp, LPCSTR filename, LPCSTR src);
+BOOL compile_buffer(FILE *fp, FILE *d_fp, LPCSTR filename, LPCSTR src,
+                    const AsmSyntax *syntax);
 
 /* ------------------------------------------------------------------ */
 /* Utility                                                              */
@@ -167,7 +169,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (!compile_buffer(fp, NULL, argv[1], src)) {
+    if (!compile_buffer(fp, NULL, argv[1], src, &apple_asm_syntax)) {
         fprintf(stderr, "Compilation failed\n");
         free(src);
         fclose(fp);

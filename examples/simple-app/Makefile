@@ -36,7 +36,7 @@ $(OBJDIR):
 
 # Compile input.c to ARMv7 assembly using the Apple clang cross-compiler
 $(ASM_OUTPUT): input.c
-	clang -S -arch armv7 -target armv7-apple-darwin -O1 $< -o $@
+	clang -S -arch armv7 -target armv7-apple-darwin -marm -O1 $< -o $@
 
 # Compile compiler.c in isolation with -Dmain=_unused_main so only its
 # main() is renamed and our main.c is left untouched.

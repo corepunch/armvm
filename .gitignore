@@ -54,3 +54,5 @@ dkms.conf
 # Build artifacts
 build/
 armvm-compiler
+examples/simple-app/simple-app
+examples/simple-app/input.s
