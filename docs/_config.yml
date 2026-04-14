@@ -1,0 +1,24 @@
+title: armvm
+description: >-
+  ARMv7 assembler and virtual machine — compile and run 32-bit ARM code
+  on any host architecture.
+theme: minima
+
+url: ""
+
+markdown: kramdown
+highlighter: rouge
+
+# Pages shown in the site header navigation
+header_pages:
+  - getting-started.md
+  - assembly-reference.md
+  - api-reference.md
+  - examples.md
+  - architecture.md
+
+minima:
+  skin: classic
+
+plugins:
+  - jekyll-feed
