@@ -294,6 +294,9 @@ void exec_blockdatatransfer(LPVM vm, DWORD instr) {
             DWORD Next = Up ? (Rn + REG_SIZE) : (Rn - REG_SIZE);
             if (Load) {
                 vm->r[j] = _loadptr(vm, Pre ? Next : Rn);
+                if (j == PC_REG) {
+                    vm->location = vm->r[PC_REG];
+                }
             } else {
                 _storeptr(vm, Pre ? Next : Rn, vm->r[j]);
             }
