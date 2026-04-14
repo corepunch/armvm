@@ -67,6 +67,7 @@ SYMBOL symbols[MAX_SYMBOLS] = { 0 };
 #define OP_PROGRAMCTR (('c' << 8) | 'p')
 
 BOOL ExtractLine(const AsmSyntax *syntax, LPCSTR *text, LPSTR lineBuffer) {
+    assert(syntax && syntax->is_comment_char);
     DWORD i, j;
     BOOL write = 1;
     BOOL quotes = 0;
@@ -503,6 +504,7 @@ const AsmSyntax apple_asm_syntax = {
 
 BOOL compile_buffer(FILE *fp, FILE *d_fp, LPCSTR filename, LPCSTR test,
                     const AsmSyntax *syntax) {
+    assert(syntax && syntax->is_comment_char && syntax->directives);
     main_label = 0;
     DWORD startsym = cs.num_symbols;
     
