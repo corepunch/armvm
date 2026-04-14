@@ -208,69 +208,133 @@ The compiled bytecode includes:
 
 ## Programmatic Usage
 
-### Using the VM in Your Application
+### Lua-like API (recommended)
+
+The preferred way to embed the ARM VM is through `avm.h`, whose interface is
+modelled after the Lua C API.
 
 ```c
-#include "vm.h"
+#include "avm.h"
 
-// Helper macro to convert register value to memory address
-#define VMA(A) ((void *)(vm->memory + vm->r[A]))
+/* ---- Host functions (avm_CFunction signature) ---- */
 
-// Implement syscall handler
-DWORD my_syscall(LPVM vm, DWORD call_id) {
-    switch (call_id) {
-        case 1: // strlen
-            return strlen((char*)VMA(0));
-        case 2: // puts  
-            return puts((char*)VMA(0));
-        // Add more syscalls as needed
-        default: return 0;
-    }
+/* strlen(const char *s) -> int  — r0 = pointer to string in VM memory */
+static int host_strlen(avm_State *L) {
+    avm_pushinteger(L, (int)strlen(avm_tostring(L, 1)));
+    return 1; /* one return value placed in r0 */
 }
 
-int main() {
-    // Load compiled assembly bytecode
-    FILE *fp = fopen("program.bin", "rb");
-    fseek(fp, 0, SEEK_END);
-    DWORD size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    BYTE *program = malloc(size);
-    fread(program, size, 1, fp);
-    fclose(fp);
-    
-    // Create VM with 64KB stack and heap
-    LPVM vm = vm_create(my_syscall, 64*1024, 64*1024, program, size);
-    
-    // Execute from entry point (usually offset 0)
-    execute(vm, 0);
-    
-    // Get return value from r0
-    DWORD result = vm->r[0];
-    
-    // Cleanup
-    vm_shutdown(vm);
-    free(program);
-    
+/* puts(const char *s) — prints and returns void */
+static int host_puts(avm_State *L) {
+    puts(avm_tostring(L, 1));
+    return 0;
+}
+
+int main(void) {
+    /* 1. Create state with 64 KB stack and 64 KB heap */
+    avm_State *L = avm_newstate(64 * 1024, 64 * 1024);
+
+    /* 2. Register host functions — must happen BEFORE avm_loadbuffer()
+     *    so the assembler can resolve "bl _strlen" / "bl _puts"        */
+    avm_register(L, "strlen", host_strlen);
+    avm_register(L, "puts",   host_puts);
+
+    /* 3. Compile and load ARM assembly source */
+    const char *src =
+        ".globl _main\n"
+        "_main:\n"
+        "    bl _puts\n"       /* prints the string whose address is in r0 */
+        "    bx lr\n";
+
+    if (avm_loadbuffer(L, src, strlen(src)) != 0) {
+        fprintf(stderr, "compilation failed\n");
+        avm_close(L);
+        return 1;
+    }
+
+    /* 4. Set up arguments: r0 = VM-relative offset of the string "Hello!\n" */
+    /* (normally you'd embed the string in the assembly; this just shows    */
+    /*  that r0 is read with avm_tointeger and written with avm_pushinteger) */
+
+    /* 5. Execute from the _main entry point */
+    avm_call(L, L->entry_point);
+
+    /* 6. Read return value from r0 (register index 1) */
+    int result = avm_tointeger(L, 1);
+
+    /* 7. Destroy state */
+    avm_close(L);
     return result;
 }
 ```
 
-### Complete Example: Compile and Run
+#### API Reference
 
-```bash
-# 1. Write ARM assembly
-cat > hello.s << 'EOF'
-.globl _main
-_main:
-    mov r0, #42
-    bx lr
-EOF
+| Function | Lua equivalent | Description |
+|---|---|---|
+| `avm_newstate(stack, heap)` | `luaL_newstate()` | Allocate a new VM state |
+| `avm_close(L)` | `lua_close()` | Destroy state and free memory |
+| `avm_register(L, name, fn)` | `lua_register()` | Bind a C function to an assembly symbol |
+| `avm_loadbuffer(L, src, len)` | `luaL_loadbuffer()` | Compile & load ARM assembly source |
+| `avm_call(L, pc)` | `lua_call()` | Execute loaded code from given PC |
+| `avm_tointeger(L, idx)` | `lua_tointeger()` | Read register `idx` (1=r0) as `int` |
+| `avm_touinteger(L, idx)` | — | Read register `idx` as `unsigned int` |
+| `avm_tonumber(L, idx)` | `lua_tonumber()` | Read register `idx` as `float` |
+| `avm_tostring(L, idx)` | `lua_tostring()` | Register value → pointer into VM memory |
+| `avm_toboolean(L, idx)` | `lua_toboolean()` | Non-zero register → true |
+| `avm_pushinteger(L, n)` | `lua_pushinteger()` | Write `int` return value to r0 |
+| `avm_pushnumber(L, n)` | `lua_pushnumber()` | Write `float` return value to r0 |
+| `avm_pushboolean(L, b)` | `lua_pushboolean()` | Write boolean (0/1) to r0 |
 
-# 2. Compile to bytecode
-./armvm-compiler -o hello.bin hello.s
+Register indices in `avm_to*` / `avm_push*` are **1-indexed**: index 1 maps to
+r0, index 2 maps to r1, etc., matching the ARM calling convention where r0
+holds the first argument and the return value.
 
-# 3. Run with your VM wrapper (you need to implement this)
-./your_vm_runner hello.bin
+After `avm_loadbuffer()` succeeds, `L->entry_point` contains the byte offset
+of the `_main` label, ready to pass to `avm_call()`.
+
+### Low-level API (backward-compatible)
+
+The lower-level `vm_create` / `vm_shutdown` / `execute` interface is still
+available for applications that need more control.
+
+```c
+#include "vm.h"
+
+// Implement syscall handler
+static DWORD my_syscall(LPVM vm, DWORD call_id) {
+    switch (call_id) {
+        case 1: return (DWORD)strlen((char *)(vm->memory + vm->r[0]));
+        case 2: return (DWORD)puts((char *)(vm->memory + vm->r[0]));
+        default: return 0;
+    }
+}
+
+int main(void) {
+    // Register external function names (index must match case number above)
+    strcpy(symbols[1], "strlen");
+    strcpy(symbols[2], "puts");
+
+    // Compile assembly source into a temporary file
+    FILE *fp = tmpfile();
+    compile_buffer(fp, NULL, NULL, source, &apple_asm_syntax);
+
+    // Read compiled bytecode
+    fseek(fp, 0, SEEK_END);
+    DWORD size = (DWORD)ftell(fp);
+    BYTE *program = malloc(size);
+    fseek(fp, 0, SEEK_SET);
+    fread(program, size, 1, fp);
+    fclose(fp);
+
+    // Create VM and execute
+    LPVM vm = vm_create(my_syscall, 64*1024, 64*1024, program, size);
+    execute(vm, (DWORD)main_label);
+    DWORD result = vm->r[0];
+    vm_shutdown(vm);
+    free(program);
+    return (int)result;
+}
 ```
 
 ## Architecture Details
@@ -304,7 +368,7 @@ xcodebuild test -project armvm.xcodeproj -scheme armtest
 # - Complex programs (linked lists, string operations, etc.)
 ```
 
-The C test suite runs 10 core tests covering essential ARM VM functionality.
+The C test suite runs 11 core tests covering essential ARM VM functionality.
 
 ## License
 

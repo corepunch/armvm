@@ -12,6 +12,9 @@ typedef unsigned int DWORD;
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
 
+/* Maximum number of C functions that can be registered with avm_register. */
+#define AVM_MAX_CFUNCTIONS 256
+
 #define OF_IMM 0x0100
 #define OF_PTR 0x0200
 #define OF_LSL 0x0400
@@ -145,6 +148,15 @@ struct VM;
 
 typedef DWORD (*VM_SysCall)(struct VM *, DWORD);
 
+/*
+ * avm_CFunction — type for C functions registered with avm_register().
+ *
+ * Mirrors lua_CFunction: the function receives the VM state as its only
+ * argument and returns the number of values it has pushed into the ARM
+ * registers (0 = void, 1 = result in r0, etc.).
+ */
+typedef int (*avm_CFunction)(struct VM *);
+
 typedef struct VM {
     DWORD r[NUM_REGISTERS];
     BYTE *memory;
@@ -155,7 +167,15 @@ typedef struct VM {
     DWORD progsize;
     DWORD cpsr;
     struct Node *head;
+    /* Lua-like function registry — populated via avm_register() */
+    avm_CFunction cfuncs[AVM_MAX_CFUNCTIONS];
+    DWORD num_cfuncs;
+    /* Entry point set by avm_loadbuffer() (position of _main label) */
+    DWORD entry_point;
 } *LPVM;
+
+/* avm_State is the public alias for struct VM (mirrors lua_State). */
+typedef struct VM avm_State;
 
 #define ID_ORCA 0x4143524F
 

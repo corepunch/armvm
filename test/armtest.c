@@ -5,7 +5,7 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "vm.h"
+#include "avm.h"
 
 // Test function declarations (from compiler.c)
 DWORD test_program(LPCSTR code, DWORD r);
@@ -97,7 +97,7 @@ void testBL() {
 void testLDR() {
     const char *code =
     "mov r0, #123\n"
-    "sub sp, sp, 100\n"
+    "sub sp, sp, #100\n"
     "str r0, [sp, #-8]\n"
     "ldr r1, [sp, #-8]\n";
     ASSERT_EQUAL(test_program(code, 1), 123, "testLDR");
