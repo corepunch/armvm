@@ -141,7 +141,7 @@ _ARMPROC _dp1[] = {
     f_NOP,
 };
 
-BOOL _condition(LPVM vm, DWORD cond) {
+static BOOL _condition(LPVM vm, DWORD cond) {
     DWORD f = vm->cpsr;
     switch (cond) {
         case OPCOND_EQ: // Z set, equal
@@ -178,7 +178,7 @@ BOOL _condition(LPVM vm, DWORD cond) {
     }
 }
 
-DWORD _calcshift(LPVM vm, DWORD instr) {
+static DWORD _calcshift(LPVM vm, DWORD instr) {
     DWORD Rm = instr & 0b1111;
     DWORD ShiftType = (instr >> 5) & 0b11;
     DWORD ShiftAmount;
@@ -197,13 +197,14 @@ DWORD _calcshift(LPVM vm, DWORD instr) {
     return 0;
 }
 
-DWORD _calcimmediate(LPVM vm, DWORD instr) {
+static DWORD _calcimmediate(LPVM vm, DWORD instr) {
     DWORD Imm = instr & 0xff;
     DWORD Rotate = ((instr >> 8) & 0xf) << 1;
-    return Imm >> Rotate | (Imm << (32 - Rotate));
+    if (Rotate == 0) return Imm;
+    return (Imm >> Rotate) | (Imm << (32 - Rotate));
 }
 
-void exec_dataprocessing(LPVM vm, DWORD instr) {
+static void exec_dataprocessing(LPVM vm, DWORD instr) {
     BOOL   Immediate = BIT_VALUE(instr, 25);
     BOOL   SetFlags = BIT_VALUE(instr, 20);
     OPCODE OpCode = (instr >> 21) & 0xf;
@@ -232,7 +233,7 @@ static inline DWORD _offsetptr(DWORD Rn, DWORD Offset, BOOL Up) {
 #define LDR_WRITEBACK_BIT 21
 #define LDR_LOAD_BIT 20
 
-void exec_datatransfer(LPVM vm, DWORD instr) {
+static void exec_datatransfer(LPVM vm, DWORD instr) {
     BOOL  Pre = BIT_VALUE(instr, LDR_PREOFFSET_BIT);
     BOOL  Immediate = !BIT_VALUE(instr, 25);
     BOOL  Byte = BIT_VALUE(instr, LDR_BYTE_BIT);
@@ -258,7 +259,7 @@ void exec_datatransfer(LPVM vm, DWORD instr) {
 #define LDRSB_HALFWORD_BIT 5
 #define LDRSB_SIGNED_BIT 6
 
-void exec_ldrsb(LPVM vm, DWORD instr, DWORD Rm) {
+static void exec_ldrsb(LPVM vm, DWORD instr, DWORD Rm) {
     BOOL  Pre = BIT_VALUE(instr, LDR_PREOFFSET_BIT);
     BOOL  Immediate = BIT_VALUE(instr, LDRSB_IMMEDIATE_BIT);
     BOOL  Halfword = BIT_VALUE(instr, LDRSB_HALFWORD_BIT);
@@ -283,7 +284,7 @@ void exec_ldrsb(LPVM vm, DWORD instr, DWORD Rm) {
     }
 }
 
-void exec_blockdatatransfer(LPVM vm, DWORD instr) {
+static void exec_blockdatatransfer(LPVM vm, DWORD instr) {
     BOOL  Load = BIT_VALUE(instr, 20);
     BOOL  WriteBack = BIT_VALUE(instr, 21);
 //    BOOL  SetFlags = BIT_VALUE(instr, 22);
@@ -312,7 +313,7 @@ void exec_blockdatatransfer(LPVM vm, DWORD instr) {
 
 #define MASK_24BIT 0x00ffffff
 
-void exec_branchwithlink(LPVM vm, DWORD instr) {
+static void exec_branchwithlink(LPVM vm, DWORD instr) {
     BOOL  Link = BIT_VALUE(instr, 24);
     BOOL  Negative = BIT_VALUE(instr, 23);
     DWORD Offset = instr & MASK_24BIT;
@@ -326,12 +327,12 @@ void exec_branchwithlink(LPVM vm, DWORD instr) {
     }
 }
 
-void exec_branchandexchange(LPVM vm, DWORD instr) {
+static void exec_branchandexchange(LPVM vm, DWORD instr) {
     DWORD Rn = instr & 0xf;
     vm->location = vm->r[Rn];
 }
 
-void exec_mul(LPVM vm, DWORD instr) {
+static void exec_mul(LPVM vm, DWORD instr) {
     BOOL  Accumulate = BIT_VALUE(instr, 21);
     BOOL  SetFlags = BIT_VALUE(instr, 20);
     DWORD Rm = REG_INSTR(vm, instr, 0);
@@ -352,7 +353,7 @@ void exec_mul(LPVM vm, DWORD instr) {
     }
 }
 
-void exec_umul(LPVM vm, DWORD instr) {
+static void exec_umul(LPVM vm, DWORD instr) {
     typedef long long slong;
     typedef unsigned long long ulong;
     BOOL  Accumulate = BIT_VALUE(instr, 21);
@@ -394,16 +395,17 @@ void exec_umul(LPVM vm, DWORD instr) {
     }
 }
 
-void exec_branch_external(LPVM vm, DWORD instr) {
+static void exec_branch_external(LPVM vm, DWORD instr) {
     DWORD proc = instr & 0xffff;
     *vm->r = vm->syscall(vm, proc);
 }
 
-void exec_instruction(LPVM vm) {
+static void exec_instruction(LPVM vm) {
     DWORD instr = *(DWORD *)(vm->memory + vm->location);
     vm->location += REG_SIZE;
     vm->r[PC_REG] = vm->location + REG_SIZE;
-    if (!_condition(vm, instr >> 28))
+    DWORD cond = instr >> 28;
+    if (__builtin_expect(cond != OPCOND_AL, 0) && !_condition(vm, cond))
         return;
     if ((instr & MASK_BX) == OP_BX) {
         exec_branchandexchange(vm, instr);
@@ -459,7 +461,6 @@ void execute(LPVM vm, DWORD pc) {
     vm->r[LR_REG] = vm->progsize;
     vm->location = pc;
     while (vm->location < vm->progsize) {
-        DWORD line = vm->location / 4 + 1;
         exec_instruction(vm);
         assert(vm->location != 0xffffffff);
     }
