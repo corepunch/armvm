@@ -249,3 +249,136 @@ LPVM vm = vm_create(app_syscall, VM_STACK_SIZE, VM_HEAP_SIZE, script_bytes, scri
 execute(vm, 0);
 vm_shutdown(vm);
 ```
+
+---
+
+## 7. Hello World — using the Lua-like API
+
+The same "hello world" from example 1, rewritten with the high-level API:
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include "avm.h"
+
+int main(void) {
+    const char *src =
+        ".globl _main\n"
+        "_main:\n"
+        "    mov r0, #42\n"
+        "    bx lr\n";
+
+    avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+
+    if (avm_loadbuffer(L, src, strlen(src)) != 0) {
+        fprintf(stderr, "compile error\n");
+        avm_close(L);
+        return 1;
+    }
+
+    avm_call(L, L->entry_point);
+    printf("Result: %d\n", avm_tointeger(L, 1));  /* Result: 42 */
+
+    avm_close(L);
+    return 0;
+}
+```
+
+---
+
+## 8. Custom host function — `strlen` with the Lua-like API
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include "avm.h"
+
+static int host_strlen(avm_State *L) {
+    /* r0 contains the VM-relative offset of the string */
+    avm_pushinteger(L, (int)strlen(avm_tostring(L, 1)));
+    return 1;   /* one return value (now in r0) */
+}
+
+int main(void) {
+    const char *src =
+        ".globl _main\n"
+        "_main:\n"
+        "    ldr r0, LCPI_str\n"
+        "LPC0:\n"
+        "    add r0, pc, r0\n"        /* r0 = absolute address of string  */
+        "    bl  _strlen\n"           /* r0 = strlen(r0)                  */
+        "    bx  lr\n"
+        "LCPI_str:\n"
+        "    .long L_str-(LPC0+8)\n"
+        "L_str:\n"
+        "    .asciz \"hello world\"\n";
+
+    avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+    avm_register(L, "strlen", host_strlen);   /* BEFORE avm_loadbuffer */
+
+    if (avm_loadbuffer(L, src, strlen(src)) != 0) {
+        avm_close(L); return 1;
+    }
+
+    avm_call(L, L->entry_point);
+    printf("strlen = %d\n", avm_tointeger(L, 1));  /* strlen = 11 */
+
+    avm_close(L);
+    return 0;
+}
+```
+
+---
+
+## 9. Reloading programs
+
+You can call `avm_loadbuffer` multiple times on the same state to swap in
+different programs without re-registering host functions:
+
+```c
+avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+avm_register(L, "puts", host_puts);
+
+/* Run first program */
+avm_loadbuffer(L, program_a, strlen(program_a));
+avm_call(L, L->entry_point);
+printf("program_a returned %d\n", avm_tointeger(L, 1));
+
+/* Swap to second program — host functions still registered */
+avm_loadbuffer(L, program_b, strlen(program_b));
+avm_call(L, L->entry_point);
+printf("program_b returned %d\n", avm_tointeger(L, 1));
+
+avm_close(L);
+```
+
+---
+
+## 10. simple-app with the Lua-like API (new style)
+
+The `examples/simple-app/main.c` has been updated to use `avm.h`.
+Key differences from the old style:
+
+| Old (`vm.h`) | New (`avm.h`) |
+|---|---|
+| `memset(symbols, 0, …); strcpy(symbols[N], "name");` | `avm_register(L, "name", fn)` |
+| Manual `VM_SysCall` switch statement | Not needed |
+| `FILE *fp = tmpfile(); compile_buffer(…); vm_create(…)` | `avm_loadbuffer(L, src, len)` |
+| `execute(vm, (DWORD)main_label)` | `avm_call(L, L->entry_point)` |
+| `(int)vm->r[0]` | `avm_tointeger(L, 1)` |
+| `vm_shutdown(vm)` | `avm_close(L)` |
+
+Host functions now use the `avm_CFunction` signature:
+
+```c
+/* Old style */
+static DWORD host_add_numbers(LPVM vm) {
+    return (DWORD)((int)vm->r[0] + (int)vm->r[1]);
+}
+
+/* New style */
+static int host_add_numbers(avm_State *L) {
+    avm_pushinteger(L, avm_tointeger(L, 1) + avm_tointeger(L, 2));
+    return 1;
+}
+```

@@ -80,14 +80,37 @@ The compiler produces two files:
 
 ### Step 3 — run it
 
-Write a small host program that loads and executes the bytecode:
+#### Using the Lua-like API (recommended)
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include "avm.h"
+
+int main(void) {
+    const char *src =
+        ".globl _main\n"
+        "_main:\n"
+        "    mov r0, #42\n"
+        "    bx lr\n";
+
+    avm_State *L = avm_newstate(64*1024, 64*1024);
+    avm_loadbuffer(L, src, strlen(src));
+    avm_call(L, L->entry_point);
+    printf("r0 = %d\n", avm_tointeger(L, 1));  /* r0 = 42 */
+    avm_close(L);
+    return 0;
+}
+```
+
+#### Using the low-level API
 
 ```c
 #include <stdio.h>
 #include <stdlib.h>
-#include "armvm/vm.h"
+#include "vm.h"
 
-static DWORD no_syscall(LPVM vm, DWORD id) { return 0; }
+static DWORD no_syscall(LPVM vm, DWORD id) { (void)vm; (void)id; return 0; }
 
 int main(void) {
     FILE *fp = fopen("hello.bin", "rb");
@@ -101,8 +124,8 @@ int main(void) {
     LPVM vm = vm_create(no_syscall, 64*1024, 64*1024, prog, size);
     free(prog);
 
-    execute(vm, 0);          /* start at offset 0 */
-    printf("r0 = %u\n", vm->r[0]);   /* prints: r0 = 42 */
+    execute(vm, 0);                              /* start at offset 0 */
+    printf("r0 = %u\n", vm->r[0]);              /* prints: r0 = 42  */
     vm_shutdown(vm);
     return 0;
 }
@@ -167,3 +190,10 @@ make -C examples/simple-app run
 ```
 
 See [Examples](examples) for a detailed walkthrough.
+
+## Next steps
+
+- [Lua-like API](avm-api) — full reference for `avm_newstate`, `avm_register`, `avm_loadbuffer`, `avm_call`, etc.
+- [API Reference](api-reference) — low-level `vm_create` / `execute` interface
+- [Assembly Reference](assembly-reference) — complete instruction and directive reference
+- [Architecture](architecture) — internals, adding new instructions, adding new directives
