@@ -110,6 +110,7 @@ void add_symbol2(LPLOCATION loc, LPCSTR symbol, SETPOSPROC setpos) {
     strncpy(sym->szName, symbol, sizeof(sym->szName));
     sym->setpos = setpos;
     sym->loc = *loc;
+    sym->filled = 0;
 }
 
 DWORD setpos_label(LPLOCATION loc, DWORD pos) {
@@ -122,6 +123,7 @@ void add_symbol(FILE *fp, LPCSTR symbol) {
     strncpy(sym->szName, symbol, sizeof(sym->szName));
     sym->loc.Position = (DWORD)ftell(fp);
     sym->setpos = setpos_label;
+    sym->filled = 0;
     DWORD tmp = -1;
     fwrite(&tmp, 4, 1, fp);
 }
@@ -717,66 +719,130 @@ int main(int argc, const char * argv[]) {
 
 #define VMA(A) ((void *)(vm->memory + vm->r[A]))
 
-DWORD _strlen(LPVM vm) {
-    LPCSTR str = VMA(0);
-    return (DWORD)strlen(str);
-}
+/* ---------------------------------------------------------------------------
+ * avm_loadbuffer — compile ARM assembly and load it into an existing state.
+ *
+ * Defined here (next to compile_buffer) so it can call compile_buffer
+ * directly without exposing it in a public header.
+ * --------------------------------------------------------------------------- */
 
-DWORD _snprintf(LPVM vm) {
-    LPCSTR str = VMA(0);
-    LPCSTR str3 = VMA(2);
-    DWORD *ptr = vm->memory + vm->r[SP_REG];
-    char *str2 = vm->memory + *(ptr++);
-    DWORD value = *(ptr++);
+#include "avm.h"
+
+int avm_loadbuffer(avm_State *L, const char *code, size_t len) {
+    (void)len; /* compile_buffer reads until NUL; len is accepted for API parity */
+
+    FILE *fp = tmpfile();
+    if (!fp) return -1;
+
+    /* Reset compiler state before each new compilation */
+    cs.num_symbols = 0;
+    cs.num_globals = 0;
+    cs.num_labels  = 0;
+    cs.num_sets    = 0;
+    cs.num_debug   = 0;
+    curline     = 0;
+    curfileline = 0;
+    main_label  = 0;
+
+    if (!compile_buffer(fp, NULL, NULL, code, &apple_asm_syntax)) {
+        fclose(fp);
+        return -1;
+    }
+
+    if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return -1; }
+    long ftell_result = ftell(fp);
+    if (ftell_result < 0) { fclose(fp); return -1; }
+    DWORD progsize = (DWORD)ftell_result;
+
+    BYTE *new_memory = malloc(progsize + L->stacksize + L->heapsize);
+    if (!new_memory) { fclose(fp); return -1; }
+
+    if (fseek(fp, 0, SEEK_SET) != 0) { free(new_memory); fclose(fp); return -1; }
+    if (fread(new_memory, progsize, 1, fp) != 1 && progsize > 0) {
+        free(new_memory);
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    free(L->memory);
+    L->memory = new_memory;
+
+    L->progsize    = progsize;
+    L->r[SP_REG]   = L->stacksize + progsize;
+    L->entry_point = (DWORD)main_label;
+
+    initialize_memory_manager(L,
+        L->memory + progsize + L->stacksize,
+        L->heapsize);
+
     return 0;
 }
 
-DWORD VM_Malloc(LPVM vm);
-DWORD VM_Memset(LPVM vm);
+/* ---------------------------------------------------------------------------
+ * C function helpers for the built-in test syscalls (strlen, malloc, …).
+ *
+ * Each function follows the avm_CFunction contract: receive args via
+ * avm_to*(), push one return value (if any) via avm_push*(), return the
+ * number of results.
+ * --------------------------------------------------------------------------- */
 
-DWORD mysyscall(LPVM vm, DWORD call) {
-    switch (call) {
-        case 1:
-            return _strlen(vm);
-        case 2:
-            return VM_Malloc(vm);
-        case 3:
-            return VM_Memset(vm);
-        case 4:
-            return puts(VMA(0));
-        case 5:
-            return _snprintf(vm);
-        default:
-            return 0;
-    }
+void *my_malloc(LPVM vm, size_t size);
+void  my_free(LPVM vm, void *ptr);
+
+static int _strlen_fn(avm_State *L) {
+    avm_pushinteger(L, (int)strlen(avm_tostring(L, 1)));
+    return 1;
 }
 
-DWORD test_program(LPCSTR code, DWORD r) {
-    FILE *fp = tmpfile();
-    extern int main_label;
-    main_label = 0;
-    
-    strcpy(symbols[1], "strlen");
-    strcpy(symbols[2], "malloc");
-    strcpy(symbols[3], "free");
-    strcpy(symbols[4], "puts");
-    strcpy(symbols[5], "snprintf");
+static int _malloc_fn(avm_State *L) {
+    size_t size = (size_t)avm_touinteger(L, 1);
+    void *ptr = my_malloc(L, size);
+    DWORD offset = ptr ? (DWORD)((BYTE *)ptr - L->memory) : 0;
+    avm_pushinteger(L, (int)offset);
+    return 1;
+}
 
-    if (!compile_buffer(fp, NULL, NULL, code, &apple_asm_syntax)) {
+static int _free_fn(avm_State *L) {
+    my_free(L, avm_topointer(L, 1));
+    return 0;
+}
+
+static int _puts_fn(avm_State *L) {
+    puts(avm_tostring(L, 1));
+    return 0;
+}
+
+static int _snprintf_fn(avm_State *L) {
+    /* stub — kept for ABI compatibility with existing test programs */
+    (void)L;
+    return 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * test_program / run_program — test helpers used by the test suite.
+ *
+ * Rewritten to use the new avm_* API as a usage example.
+ * --------------------------------------------------------------------------- */
+
+DWORD test_program(LPCSTR code, DWORD r) {
+    avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+
+    avm_register(L, "strlen",   _strlen_fn);
+    avm_register(L, "malloc",   _malloc_fn);
+    avm_register(L, "free",     _free_fn);
+    avm_register(L, "puts",     _puts_fn);
+    avm_register(L, "snprintf", _snprintf_fn);
+
+    if (avm_loadbuffer(L, code, strlen(code)) != 0) {
         printf("Failed to compile\n");
-        return -1;
+        avm_close(L);
+        return (DWORD)-1;
     }
-    fseek(fp, 0, SEEK_END);
-    DWORD psize = (DWORD)ftell(fp);
-    void *buffer = malloc(psize);
-    fseek(fp, 0, SEEK_SET);
-    fread(buffer, psize, 1, fp);
-    fclose(fp);
-    LPVM vm = vm_create(mysyscall, VM_STACK_SIZE, VM_HEAP_SIZE, buffer, psize);
-    execute(vm, main_label);
-    DWORD result = vm->r[r];
-    vm_shutdown(vm);
-    free(buffer);
+
+    avm_call(L, L->entry_point);
+    DWORD result = avm_touinteger(L, (int)r + 1);
+    avm_close(L);
     return result;
 }
 
@@ -786,15 +852,16 @@ DWORD run_program(LPCSTR filename) {
     FILE *fp = fopen(path, "rb");
     if (!fp) {
         printf("File not found %s\n", path);
-        return -1;
+        return (DWORD)-1;
     }
     fseek(fp, 0, SEEK_END);
     size_t psize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    char *buf = malloc(psize+1);
-    buf[psize]=0;
+    char *buf = malloc(psize + 1);
+    buf[psize] = 0;
     fread(buf, psize, 1, fp);
-    DWORD r = test_program(buf, 0);
+    fclose(fp);
+    DWORD result = test_program(buf, 0);
     free(buf);
-    return r;
+    return result;
 }

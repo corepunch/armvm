@@ -473,11 +473,12 @@ void execute(LPVM vm, DWORD pc) {
 
 LPVM vm_create(VM_SysCall syscall, DWORD stack_size, DWORD heap_size,
                BYTE *program, DWORD progsize) {
-    BYTE *memory = malloc(sizeof(struct VM) + stack_size + heap_size + progsize);
-    memset(memory, 0, sizeof(struct VM));
-    memcpy(memory + sizeof(struct VM), program, progsize);
-    LPVM vm = (LPVM)memory;
-    vm->memory = memory + sizeof(struct VM);
+    LPVM vm = calloc(1, sizeof(struct VM));
+    if (!vm) return NULL;
+    BYTE *memory = malloc(stack_size + heap_size + progsize);
+    if (!memory) { free(vm); return NULL; }
+    memcpy(memory, program, progsize);
+    vm->memory = memory;
     vm->stacksize = stack_size;
     vm->heapsize = heap_size;
     vm->progsize = progsize;
@@ -488,5 +489,109 @@ LPVM vm_create(VM_SysCall syscall, DWORD stack_size, DWORD heap_size,
 }
 
 void vm_shutdown(LPVM vm) {
+    free(vm->memory);
     free(vm);
+}
+
+/* ---------------------------------------------------------------------------
+ * Lua-like public API  (avm_*)
+ *
+ * These functions provide an interface modelled after the Lua C API so that
+ * embedding the ARM VM feels familiar.  See armvm/avm.h for documentation.
+ * --------------------------------------------------------------------------- */
+
+#include "avm.h"
+
+/*
+ * Internal syscall dispatcher used by avm_newstate().
+ *
+ * When the VM executes an external-call instruction it invokes this handler
+ * with the registered function index.  We look up the matching avm_CFunction
+ * in L->cfuncs and call it.
+ */
+static DWORD _avm_dispatch(LPVM vm, DWORD call_id) {
+    if (call_id < AVM_MAX_CFUNCTIONS && vm->cfuncs[call_id]) {
+        vm->cfuncs[call_id](vm);
+    }
+    return vm->r[0];
+}
+
+/* State management -------------------------------------------------------- */
+
+avm_State *avm_newstate(DWORD stack_size, DWORD heap_size) {
+    LPVM vm = calloc(1, sizeof(struct VM));
+    if (!vm) return NULL;
+    vm->stacksize = stack_size;
+    vm->heapsize = heap_size;
+    vm->syscall = _avm_dispatch;
+    return vm;
+}
+
+void avm_close(avm_State *L) {
+    free(L->memory);
+    free(L);
+}
+
+/* Execution --------------------------------------------------------------- */
+
+void avm_call(avm_State *L, DWORD pc) {
+    execute(L, pc);
+}
+
+/* C function registration ------------------------------------------------- */
+
+void avm_register(avm_State *L, const char *name, avm_CFunction fn) {
+    assert(L->num_cfuncs + 1 < AVM_MAX_CFUNCTIONS);
+    DWORD idx = ++L->num_cfuncs;
+    strncpy(symbols[idx], name, sizeof(SYMBOL) - 1);
+    symbols[idx][sizeof(SYMBOL) - 1] = '\0';
+    L->cfuncs[idx] = fn;
+}
+
+/* Stack read — ARM registers accessed 1-indexed (like lua_to*) ----------- */
+
+int avm_tointeger(avm_State *L, int idx) {
+    assert(idx >= 1 && idx <= NUM_REGISTERS);
+    return (int)L->r[idx - 1];
+}
+
+unsigned int avm_touinteger(avm_State *L, int idx) {
+    assert(idx >= 1 && idx <= NUM_REGISTERS);
+    return L->r[idx - 1];
+}
+
+float avm_tonumber(avm_State *L, int idx) {
+    assert(idx >= 1 && idx <= NUM_REGISTERS);
+    float f;
+    memcpy(&f, &L->r[idx - 1], sizeof(f));
+    return f;
+}
+
+const char *avm_tostring(avm_State *L, int idx) {
+    assert(idx >= 1 && idx <= NUM_REGISTERS);
+    return (const char *)(L->memory + L->r[idx - 1]);
+}
+
+void *avm_topointer(avm_State *L, int idx) {
+    assert(idx >= 1 && idx <= NUM_REGISTERS);
+    return (void *)(L->memory + L->r[idx - 1]);
+}
+
+int avm_toboolean(avm_State *L, int idx) {
+    assert(idx >= 1 && idx <= NUM_REGISTERS);
+    return L->r[idx - 1] != 0;
+}
+
+/* Stack write — set return values from an avm_CFunction (like lua_push*) - */
+
+void avm_pushinteger(avm_State *L, int n) {
+    L->r[0] = (DWORD)n;
+}
+
+void avm_pushnumber(avm_State *L, float n) {
+    memcpy(&L->r[0], &n, sizeof(n));
+}
+
+void avm_pushboolean(avm_State *L, int b) {
+    L->r[0] = b ? 1 : 0;
 }

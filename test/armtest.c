@@ -5,7 +5,7 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "vm.h"
+#include "avm.h"
 
 // Test function declarations (from compiler.c)
 DWORD test_program(LPCSTR code, DWORD r);
@@ -97,7 +97,7 @@ void testBL() {
 void testLDR() {
     const char *code =
     "mov r0, #123\n"
-    "sub sp, sp, 100\n"
+    "sub sp, sp, #100\n"
     "str r0, [sp, #-8]\n"
     "ldr r1, [sp, #-8]\n";
     ASSERT_EQUAL(test_program(code, 1), 123, "testLDR");
@@ -144,6 +144,54 @@ void testPopPC() {
     "mov r0, #99\n"     // set return value
     "bx lr\n";          // return to pop {pc}
     ASSERT_EQUAL(test_program(code, 0), 99, "testPopPC");
+}
+
+void testFloatRoundtrip() {
+    // Verify that avm_pushnumber and avm_tonumber preserve float bit-patterns
+    // without undefined behaviour (they must use memcpy, not pointer casts).
+    avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+
+    // Push a known float and read it back — the bit pattern must be identical.
+    float input = 3.14159f;
+    avm_pushnumber(L, input);
+    float output = avm_tonumber(L, 1);
+
+    // Compare bit-for-bit using memcpy to avoid any UB in the test itself.
+    unsigned int in_bits, out_bits;
+    memcpy(&in_bits, &input, sizeof(in_bits));
+    memcpy(&out_bits, &output, sizeof(out_bits));
+
+    tests_run++;
+    if (in_bits == out_bits) {
+        tests_passed++;
+        printf("✓ testFloatRoundtrip\n");
+    } else {
+        tests_failed++;
+        printf("✗ testFloatRoundtrip: bit pattern 0x%08x became 0x%08x\n",
+               in_bits, out_bits);
+    }
+
+    // Also verify a negative float.
+    // avm_pushnumber always writes to r0 (register index 1), so each call
+    // overwrites the previous value and avm_tonumber(L, 1) reads the latest.
+    float neg = -1.0f;
+    avm_pushnumber(L, neg);
+    float neg_out = avm_tonumber(L, 1);
+    unsigned int neg_in_bits, neg_out_bits;
+    memcpy(&neg_in_bits, &neg, sizeof(neg_in_bits));
+    memcpy(&neg_out_bits, &neg_out, sizeof(neg_out_bits));
+
+    tests_run++;
+    if (neg_in_bits == neg_out_bits) {
+        tests_passed++;
+        printf("✓ testFloatRoundtrip (negative)\n");
+    } else {
+        tests_failed++;
+        printf("✗ testFloatRoundtrip (negative): bit pattern 0x%08x became 0x%08x\n",
+               neg_in_bits, neg_out_bits);
+    }
+
+    avm_close(L);
 }
 
 // Note: File-based tests from the original Objective-C test suite are commented out
@@ -210,6 +258,7 @@ int main() {
     testLDR2();
     testADD();
     testPopPC();
+    testFloatRoundtrip();
 
     // Print summary
     printf("\n=================\n");
