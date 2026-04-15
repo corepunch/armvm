@@ -728,7 +728,7 @@ int main(int argc, const char * argv[]) {
 
 #include "avm.h"
 
-int avm_loadbuffer(avm_State *L, const char *code, size_t len) {
+int avm_loadbuffer(avm_State *S, const char *code, size_t len) {
     (void)len; /* compile_buffer reads until NUL; len is accepted for API parity */
 
     FILE *fp = tmpfile();
@@ -754,7 +754,7 @@ int avm_loadbuffer(avm_State *L, const char *code, size_t len) {
     if (ftell_result < 0) { fclose(fp); return -1; }
     DWORD progsize = (DWORD)ftell_result;
 
-    BYTE *new_memory = malloc(progsize + L->stacksize + L->heapsize);
+    BYTE *new_memory = malloc(progsize + S->stacksize + S->heapsize);
     if (!new_memory) { fclose(fp); return -1; }
 
     if (fseek(fp, 0, SEEK_SET) != 0) { free(new_memory); fclose(fp); return -1; }
@@ -765,16 +765,16 @@ int avm_loadbuffer(avm_State *L, const char *code, size_t len) {
     }
     fclose(fp);
 
-    free(L->memory);
-    L->memory = new_memory;
+    free(S->memory);
+    S->memory = new_memory;
 
-    L->progsize    = progsize;
-    L->r[SP_REG]   = L->stacksize + progsize;
-    L->entry_point = (DWORD)main_label;
+    S->progsize    = progsize;
+    S->r[SP_REG]   = S->stacksize + progsize;
+    S->entry_point = (DWORD)main_label;
 
-    initialize_memory_manager(L,
-        L->memory + progsize + L->stacksize,
-        L->heapsize);
+    initialize_memory_manager(S,
+        S->memory + progsize + S->stacksize,
+        S->heapsize);
 
     return 0;
 }
@@ -790,32 +790,32 @@ int avm_loadbuffer(avm_State *L, const char *code, size_t len) {
 void *my_malloc(LPVM vm, size_t size);
 void  my_free(LPVM vm, void *ptr);
 
-static int _strlen_fn(avm_State *L) {
-    avm_pushinteger(L, (int)strlen(avm_tostring(L, 1)));
+static int _strlen_fn(avm_State *S) {
+    avm_pushinteger(S, (int)strlen(avm_tostring(S, 1)));
     return 1;
 }
 
-static int _malloc_fn(avm_State *L) {
-    size_t size = (size_t)avm_touinteger(L, 1);
-    void *ptr = my_malloc(L, size);
-    DWORD offset = ptr ? (DWORD)((BYTE *)ptr - L->memory) : 0;
-    avm_pushinteger(L, (int)offset);
+static int _malloc_fn(avm_State *S) {
+    size_t size = (size_t)avm_touinteger(S, 1);
+    void *ptr = my_malloc(S, size);
+    DWORD offset = ptr ? (DWORD)((BYTE *)ptr - S->memory) : 0;
+    avm_pushinteger(S, (int)offset);
     return 1;
 }
 
-static int _free_fn(avm_State *L) {
-    my_free(L, avm_topointer(L, 1));
+static int _free_fn(avm_State *S) {
+    my_free(S, avm_topointer(S, 1));
     return 0;
 }
 
-static int _puts_fn(avm_State *L) {
-    puts(avm_tostring(L, 1));
+static int _puts_fn(avm_State *S) {
+    puts(avm_tostring(S, 1));
     return 0;
 }
 
-static int _snprintf_fn(avm_State *L) {
+static int _snprintf_fn(avm_State *S) {
     /* stub — kept for ABI compatibility with existing test programs */
-    (void)L;
+    (void)S;
     return 0;
 }
 
@@ -826,23 +826,23 @@ static int _snprintf_fn(avm_State *L) {
  * --------------------------------------------------------------------------- */
 
 DWORD test_program(LPCSTR code, DWORD r) {
-    avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+    avm_State *S = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
 
-    avm_register(L, "strlen",   _strlen_fn);
-    avm_register(L, "malloc",   _malloc_fn);
-    avm_register(L, "free",     _free_fn);
-    avm_register(L, "puts",     _puts_fn);
-    avm_register(L, "snprintf", _snprintf_fn);
+    avm_register(S, "strlen",   _strlen_fn);
+    avm_register(S, "malloc",   _malloc_fn);
+    avm_register(S, "free",     _free_fn);
+    avm_register(S, "puts",     _puts_fn);
+    avm_register(S, "snprintf", _snprintf_fn);
 
-    if (avm_loadbuffer(L, code, strlen(code)) != 0) {
+    if (avm_loadbuffer(S, code, strlen(code)) != 0) {
         printf("Failed to compile\n");
-        avm_close(L);
+        avm_close(S);
         return (DWORD)-1;
     }
 
-    avm_call(L, L->entry_point);
-    DWORD result = avm_touinteger(L, (int)r + 1);
-    avm_close(L);
+    avm_call(S, S->entry_point);
+    DWORD result = avm_touinteger(S, (int)r + 1);
+    avm_close(S);
     return result;
 }
 

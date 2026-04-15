@@ -149,12 +149,12 @@ void testPopPC() {
 void testFloatRoundtrip() {
     // Verify that avm_pushnumber and avm_tonumber preserve float bit-patterns
     // without undefined behaviour (they must use memcpy, not pointer casts).
-    avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+    avm_State *S = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
 
     // Push a known float and read it back — the bit pattern must be identical.
     float input = 3.14159f;
-    avm_pushnumber(L, input);
-    float output = avm_tonumber(L, 1);
+    avm_pushnumber(S, input);
+    float output = avm_tonumber(S, 1);
 
     // Compare bit-for-bit using memcpy to avoid any UB in the test itself.
     unsigned int in_bits, out_bits;
@@ -173,10 +173,10 @@ void testFloatRoundtrip() {
 
     // Also verify a negative float.
     // avm_pushnumber always writes to r0 (register index 1), so each call
-    // overwrites the previous value and avm_tonumber(L, 1) reads the latest.
+    // overwrites the previous value and avm_tonumber(S, 1) reads the latest.
     float neg = -1.0f;
-    avm_pushnumber(L, neg);
-    float neg_out = avm_tonumber(L, 1);
+    avm_pushnumber(S, neg);
+    float neg_out = avm_tonumber(S, 1);
     unsigned int neg_in_bits, neg_out_bits;
     memcpy(&neg_in_bits, &neg, sizeof(neg_in_bits));
     memcpy(&neg_out_bits, &neg_out, sizeof(neg_out_bits));
@@ -191,7 +191,7 @@ void testFloatRoundtrip() {
                neg_in_bits, neg_out_bits);
     }
 
-    avm_close(L);
+    avm_close(S);
 }
 
 // Note: File-based tests from the original Objective-C test suite are commented out
