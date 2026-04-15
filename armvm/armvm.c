@@ -508,7 +508,7 @@ void vm_shutdown(LPVM vm) {
  *
  * When the VM executes an external-call instruction it invokes this handler
  * with the registered function index.  We look up the matching avm_CFunction
- * in L->cfuncs and call it.
+ * in S->cfuncs and call it.
  */
 static DWORD _avm_dispatch(LPVM vm, DWORD call_id) {
     if (call_id < AVM_MAX_CFUNCTIONS && vm->cfuncs[call_id]) {
@@ -528,71 +528,71 @@ avm_State *avm_newstate(DWORD stack_size, DWORD heap_size) {
     return vm;
 }
 
-void avm_close(avm_State *L) {
-    free(L->memory);
-    free(L);
+void avm_close(avm_State *S) {
+    free(S->memory);
+    free(S);
 }
 
 /* Execution --------------------------------------------------------------- */
 
-void avm_call(avm_State *L, DWORD pc) {
-    execute(L, pc);
+void avm_call(avm_State *S, DWORD pc) {
+    execute(S, pc);
 }
 
 /* C function registration ------------------------------------------------- */
 
-void avm_register(avm_State *L, const char *name, avm_CFunction fn) {
-    assert(L->num_cfuncs + 1 < AVM_MAX_CFUNCTIONS);
-    DWORD idx = ++L->num_cfuncs;
+void avm_register(avm_State *S, const char *name, avm_CFunction fn) {
+    assert(S->num_cfuncs + 1 < AVM_MAX_CFUNCTIONS);
+    DWORD idx = ++S->num_cfuncs;
     strncpy(symbols[idx], name, sizeof(SYMBOL) - 1);
     symbols[idx][sizeof(SYMBOL) - 1] = '\0';
-    L->cfuncs[idx] = fn;
+    S->cfuncs[idx] = fn;
 }
 
 /* Stack read — ARM registers accessed 1-indexed (like lua_to*) ----------- */
 
-int avm_tointeger(avm_State *L, int idx) {
+int avm_tointeger(avm_State *S, int idx) {
     assert(idx >= 1 && idx <= NUM_REGISTERS);
-    return (int)L->r[idx - 1];
+    return (int)S->r[idx - 1];
 }
 
-unsigned int avm_touinteger(avm_State *L, int idx) {
+unsigned int avm_touinteger(avm_State *S, int idx) {
     assert(idx >= 1 && idx <= NUM_REGISTERS);
-    return L->r[idx - 1];
+    return S->r[idx - 1];
 }
 
-float avm_tonumber(avm_State *L, int idx) {
+float avm_tonumber(avm_State *S, int idx) {
     assert(idx >= 1 && idx <= NUM_REGISTERS);
     float f;
-    memcpy(&f, &L->r[idx - 1], sizeof(f));
+    memcpy(&f, &S->r[idx - 1], sizeof(f));
     return f;
 }
 
-const char *avm_tostring(avm_State *L, int idx) {
+const char *avm_tostring(avm_State *S, int idx) {
     assert(idx >= 1 && idx <= NUM_REGISTERS);
-    return (const char *)(L->memory + L->r[idx - 1]);
+    return (const char *)(S->memory + S->r[idx - 1]);
 }
 
-void *avm_topointer(avm_State *L, int idx) {
+void *avm_topointer(avm_State *S, int idx) {
     assert(idx >= 1 && idx <= NUM_REGISTERS);
-    return (void *)(L->memory + L->r[idx - 1]);
+    return (void *)(S->memory + S->r[idx - 1]);
 }
 
-int avm_toboolean(avm_State *L, int idx) {
+int avm_toboolean(avm_State *S, int idx) {
     assert(idx >= 1 && idx <= NUM_REGISTERS);
-    return L->r[idx - 1] != 0;
+    return S->r[idx - 1] != 0;
 }
 
 /* Stack write — set return values from an avm_CFunction (like lua_push*) - */
 
-void avm_pushinteger(avm_State *L, int n) {
-    L->r[0] = (DWORD)n;
+void avm_pushinteger(avm_State *S, int n) {
+    S->r[0] = (DWORD)n;
 }
 
-void avm_pushnumber(avm_State *L, float n) {
-    memcpy(&L->r[0], &n, sizeof(n));
+void avm_pushnumber(avm_State *S, float n) {
+    memcpy(&S->r[0], &n, sizeof(n));
 }
 
-void avm_pushboolean(avm_State *L, int b) {
-    L->r[0] = b ? 1 : 0;
+void avm_pushboolean(avm_State *S, int b) {
+    S->r[0] = b ? 1 : 0;
 }

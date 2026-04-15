@@ -34,11 +34,11 @@
  * We validate that the offset is within the VM's addressable range and that
  * the string is NUL-terminated before passing it to the host.
  */
-static int host_print_string(avm_State *L) {
-    DWORD offset = avm_touinteger(L, 1);
-    DWORD mem_size = L->progsize + L->stacksize + L->heapsize;
+static int host_print_string(avm_State *S) {
+    DWORD offset = avm_touinteger(S, 1);
+    DWORD mem_size = S->progsize + S->stacksize + S->heapsize;
     if (offset >= mem_size) return 0;               /* offset out of range  */
-    const char *base = (const char *)L->memory + offset;
+    const char *base = (const char *)S->memory + offset;
     DWORD max_len = mem_size - offset;
     /* Verify the string is NUL-terminated within the addressable range */
     DWORD len = 0;
@@ -53,8 +53,8 @@ static int host_print_string(avm_State *L) {
  *
  * a is in r0 (idx 1), b is in r1 (idx 2).
  */
-static int host_add_numbers(avm_State *L) {
-    avm_pushinteger(L, avm_tointeger(L, 1) + avm_tointeger(L, 2));
+static int host_add_numbers(avm_State *S) {
+    avm_pushinteger(S, avm_tointeger(S, 1) + avm_tointeger(S, 2));
     return 1; /* one integer result in r0 */
 }
 
@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
     /* ------------------------------------------------------------------
      * 1. Create the VM state (64 KB stack, 64 KB heap).
      * ------------------------------------------------------------------ */
-    avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+    avm_State *S = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
 
     /* ------------------------------------------------------------------
      * 2. Register host functions before loading code.
@@ -112,16 +112,16 @@ int main(int argc, char *argv[]) {
      *    The leading underscore is stripped by the assembler; we register the
      *    bare name here.
      * ------------------------------------------------------------------ */
-    avm_register(L, "print_string", host_print_string);
-    avm_register(L, "add_numbers",  host_add_numbers);
+    avm_register(S, "print_string", host_print_string);
+    avm_register(S, "add_numbers",  host_add_numbers);
 
     /* ------------------------------------------------------------------
      * 3. Compile and load the assembly source.
      * ------------------------------------------------------------------ */
-    if (avm_loadbuffer(L, src, strlen(src)) != 0) {
+    if (avm_loadbuffer(S, src, strlen(src)) != 0) {
         fprintf(stderr, "Compilation failed\n");
         free(src);
-        avm_close(L);
+        avm_close(S);
         return 1;
     }
     free(src);
@@ -130,18 +130,18 @@ int main(int argc, char *argv[]) {
      * 4. Execute from the _main entry point.
      * ------------------------------------------------------------------ */
     printf("Running ARM32 program...\n");
-    avm_call(L, L->entry_point);
+    avm_call(S, S->entry_point);
 
     /* ------------------------------------------------------------------
      * 5. Read the integer return value from r0 (register index 1).
      * ------------------------------------------------------------------ */
-    int result = avm_tointeger(L, 1);
+    int result = avm_tointeger(S, 1);
     printf("Program returned: %d\n", result);
 
     /* ------------------------------------------------------------------
      * 6. Clean up.
      * ------------------------------------------------------------------ */
-    avm_close(L);
+    avm_close(S);
     return 0;
 }
 
