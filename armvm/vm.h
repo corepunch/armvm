@@ -12,7 +12,11 @@ typedef unsigned int DWORD;
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
 
-/* Maximum number of C functions that can be registered with avm_register. */
+/*
+ * Size of the C function table used by avm_register.
+ * Index 0 is reserved/unused by convention, so the maximum number of
+ * functions that can actually be registered is AVM_MAX_CFUNCTIONS - 1.
+ */
 #define AVM_MAX_CFUNCTIONS 256
 
 #define OF_IMM 0x0100
@@ -152,8 +156,10 @@ typedef DWORD (*VM_SysCall)(struct VM *, DWORD);
  * avm_CFunction — type for C functions registered with avm_register().
  *
  * Mirrors lua_CFunction: the function receives the VM state as its only
- * argument and returns the number of values it has pushed into the ARM
- * registers (0 = void, 1 = result in r0, etc.).
+ * argument and may produce at most one return value via r0.
+ * Return 0 for no value (void) or 1 when a result has been written to r0
+ * via avm_pushinteger/avm_pushnumber/avm_pushboolean.
+ * Multiple return registers are not part of the public API contract.
  */
 typedef int (*avm_CFunction)(struct VM *);
 

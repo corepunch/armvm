@@ -73,9 +73,12 @@ Prototype for every host function registered with `avm_register()`.
 - **Arguments**: read from registers using `avm_tointeger(L, 1)` (= r0),
   `avm_tointeger(L, 2)` (= r1), etc.
 - **Return values**: write with `avm_pushinteger(L, result)` to set r0.
-- **Return the count**: return 0 if void, 1 if you pushed one result.
+- **Return the count**: return 0 if void (no result), 1 after pushing one result. Only r0 is used for return values; returning a count higher than 1 has no additional effect.
 
 ```c
+#include <string.h>
+#include "avm.h"
+
 /* Example: strlen wrapper */
 static int host_strlen(avm_State *L) {
     const char *s = avm_tostring(L, 1);   /* r0 = VM-relative pointer */
@@ -155,6 +158,11 @@ bl _malloc     @ calls host_malloc(L); r0 = address of allocated block
 at the next available index and stores `fn` in `L->cfuncs[index]`.  The
 internal `_avm_dispatch` syscall handler looks up `L->cfuncs[call_id]` and
 calls it.
+
+> **Note**: `symbols[]` is a global table shared across all states in the same
+> process.  Creating two `avm_State` instances and registering different
+> functions will overwrite the same indices.  Only one state (or one shared
+> global registry) should be used for compilation at a time.
 
 ---
 

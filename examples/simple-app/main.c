@@ -31,14 +31,20 @@
  * print_string(const char *s)
  *
  * ARM calling convention: s is passed as an offset into VM memory in r0.
- * avm_tostring(L, 1) converts that offset to a host pointer automatically.
+ * We validate that the offset is within the VM's addressable range and that
+ * the string is NUL-terminated before passing it to the host.
  */
 static int host_print_string(avm_State *L) {
-    const char *str = avm_tostring(L, 1);
-    /* Basic bounds check: avm_tostring returns L->memory + r0, which is
-     * always within the VM's address space as long as r0 < total memory.
-     * For a production implementation you would add an explicit length check. */
-    fputs(str, stdout);
+    DWORD offset = avm_touinteger(L, 1);
+    DWORD mem_size = L->progsize + L->stacksize + L->heapsize;
+    if (offset >= mem_size) return 0;               /* offset out of range  */
+    const char *base = (const char *)L->memory + offset;
+    DWORD max_len = mem_size - offset;
+    /* Verify the string is NUL-terminated within the addressable range */
+    DWORD len = 0;
+    while (len < max_len && base[len] != '\0') len++;
+    if (len == max_len) return 0;                   /* not NUL-terminated   */
+    fwrite(base, 1, len, stdout);
     return 0; /* void — no return value */
 }
 

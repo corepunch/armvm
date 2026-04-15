@@ -749,16 +749,24 @@ int avm_loadbuffer(avm_State *L, const char *code, size_t len) {
         return -1;
     }
 
-    fseek(fp, 0, SEEK_END);
-    DWORD progsize = (DWORD)ftell(fp);
+    if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return -1; }
+    long ftell_result = ftell(fp);
+    if (ftell_result < 0) { fclose(fp); return -1; }
+    DWORD progsize = (DWORD)ftell_result;
+
+    BYTE *new_memory = malloc(progsize + L->stacksize + L->heapsize);
+    if (!new_memory) { fclose(fp); return -1; }
+
+    if (fseek(fp, 0, SEEK_SET) != 0) { free(new_memory); fclose(fp); return -1; }
+    if (fread(new_memory, progsize, 1, fp) != 1 && progsize > 0) {
+        free(new_memory);
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
 
     free(L->memory);
-    L->memory = malloc(progsize + L->stacksize + L->heapsize);
-    if (!L->memory) { fclose(fp); return -1; }
-
-    fseek(fp, 0, SEEK_SET);
-    fread(L->memory, progsize, 1, fp);
-    fclose(fp);
+    L->memory = new_memory;
 
     L->progsize    = progsize;
     L->r[SP_REG]   = L->stacksize + progsize;

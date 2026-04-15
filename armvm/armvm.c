@@ -474,7 +474,9 @@ void execute(LPVM vm, DWORD pc) {
 LPVM vm_create(VM_SysCall syscall, DWORD stack_size, DWORD heap_size,
                BYTE *program, DWORD progsize) {
     LPVM vm = calloc(1, sizeof(struct VM));
+    if (!vm) return NULL;
     BYTE *memory = malloc(stack_size + heap_size + progsize);
+    if (!memory) { free(vm); return NULL; }
     memcpy(memory, program, progsize);
     vm->memory = memory;
     vm->stacksize = stack_size;
@@ -518,6 +520,7 @@ static DWORD _avm_dispatch(LPVM vm, DWORD call_id) {
 
 avm_State *avm_newstate(DWORD stack_size, DWORD heap_size) {
     LPVM vm = calloc(1, sizeof(struct VM));
+    if (!vm) return NULL;
     vm->stacksize = stack_size;
     vm->heapsize = heap_size;
     vm->syscall = _avm_dispatch;
@@ -541,6 +544,7 @@ void avm_register(avm_State *L, const char *name, avm_CFunction fn) {
     assert(L->num_cfuncs + 1 < AVM_MAX_CFUNCTIONS);
     DWORD idx = ++L->num_cfuncs;
     strncpy(symbols[idx], name, sizeof(SYMBOL) - 1);
+    symbols[idx][sizeof(SYMBOL) - 1] = '\0';
     L->cfuncs[idx] = fn;
 }
 
@@ -558,7 +562,9 @@ unsigned int avm_touinteger(avm_State *L, int idx) {
 
 float avm_tonumber(avm_State *L, int idx) {
     assert(idx >= 1 && idx <= NUM_REGISTERS);
-    return *(float *)&L->r[idx - 1];
+    float f;
+    memcpy(&f, &L->r[idx - 1], sizeof(f));
+    return f;
 }
 
 const char *avm_tostring(avm_State *L, int idx) {
@@ -583,7 +589,7 @@ void avm_pushinteger(avm_State *L, int n) {
 }
 
 void avm_pushnumber(avm_State *L, float n) {
-    *(float *)&L->r[0] = n;
+    memcpy(&L->r[0], &n, sizeof(n));
 }
 
 void avm_pushboolean(avm_State *L, int b) {

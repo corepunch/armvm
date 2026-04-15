@@ -214,6 +214,9 @@ The preferred way to embed the ARM VM is through `avm.h`, whose interface is
 modelled after the Lua C API.
 
 ```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "avm.h"
 
 /* ---- Host functions (avm_CFunction signature) ---- */

@@ -146,6 +146,52 @@ void testPopPC() {
     ASSERT_EQUAL(test_program(code, 0), 99, "testPopPC");
 }
 
+void testFloatRoundtrip() {
+    // Verify that avm_pushnumber and avm_tonumber preserve float bit-patterns
+    // without undefined behaviour (they must use memcpy, not pointer casts).
+    avm_State *L = avm_newstate(VM_STACK_SIZE, VM_HEAP_SIZE);
+
+    // Push a known float and read it back — the bit pattern must be identical.
+    float input = 3.14159f;
+    avm_pushnumber(L, input);
+    float output = avm_tonumber(L, 1);
+
+    // Compare bit-for-bit using memcpy to avoid any UB in the test itself.
+    unsigned int in_bits, out_bits;
+    memcpy(&in_bits, &input, sizeof(in_bits));
+    memcpy(&out_bits, &output, sizeof(out_bits));
+
+    tests_run++;
+    if (in_bits == out_bits) {
+        tests_passed++;
+        printf("✓ testFloatRoundtrip\n");
+    } else {
+        tests_failed++;
+        printf("✗ testFloatRoundtrip: bit pattern 0x%08x became 0x%08x\n",
+               in_bits, out_bits);
+    }
+
+    // Also verify a negative float.
+    float neg = -1.0f;
+    avm_pushnumber(L, neg);
+    float neg_out = avm_tonumber(L, 1);
+    unsigned int neg_in_bits, neg_out_bits;
+    memcpy(&neg_in_bits, &neg, sizeof(neg_in_bits));
+    memcpy(&neg_out_bits, &neg_out, sizeof(neg_out_bits));
+
+    tests_run++;
+    if (neg_in_bits == neg_out_bits) {
+        tests_passed++;
+        printf("✓ testFloatRoundtrip (negative)\n");
+    } else {
+        tests_failed++;
+        printf("✗ testFloatRoundtrip (negative): bit pattern 0x%08x became 0x%08x\n",
+               neg_in_bits, neg_out_bits);
+    }
+
+    avm_close(L);
+}
+
 // Note: File-based tests from the original Objective-C test suite are commented out
 // because they require external assembly test files that don't exist in the repository:
 // - linked-list.s, linked-list2.s - Linked list traversal tests
@@ -210,6 +256,7 @@ int main() {
     testLDR2();
     testADD();
     testPopPC();
+    testFloatRoundtrip();
 
     // Print summary
     printf("\n=================\n");

@@ -44,6 +44,8 @@ Program returned: 42
 ## Embedding in 30 seconds
 
 ```c
+#include <stdio.h>
+#include <string.h>
 #include "avm.h"
 
 static int host_strlen(avm_State *L) {
