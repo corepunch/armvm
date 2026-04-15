@@ -373,6 +373,58 @@ xcodebuild test -project armvm.xcodeproj -scheme armtest
 
 The C test suite runs 11 core tests covering essential ARM VM functionality.
 
+## Use Cases
+
+### Sandboxed Plugin / Mod Execution
+Run untrusted user-supplied code — game mods, content scripts, user plugins — in a hard-isolated environment, similar to the **Quake III Arena VM**. The guest has no direct access to host memory or system calls beyond the narrow set of host functions you register, so a buggy or malicious plugin cannot corrupt or escape the host process.
+
+### Cross-Architecture Legacy Code
+Execute 32-bit ARMv7 logic — old iOS app libraries, embedded firmware, legacy mobile SDKs — on any modern host (x86-64 servers, Apple Silicon Macs, RISC-V boards) without a full OS emulator. Think of it like a lightweight container for ARM32 binaries: bring the code, not the hardware.
+
+### Embedded Scripting Engine
+Embed armvm as a scripting layer inside a C/C++ application. Authors write behaviour in ARM assembly (or compile C to ARM32 with Clang), register only the host functions they want to expose, and call into the VM at runtime — a fully deterministic, zero-dependency alternative to Lua or Wren for latency-sensitive applications.
+
+### Education & ARM Assembly Learning
+Provide a safe, self-contained environment for learning ARMv7 assembly. Students can write, compile, and step through real ARM instructions on any laptop without needing physical hardware or a full QEMU image.
+
+### Embedded / IoT Firmware Testing
+Compile embedded firmware written in C to ARM32 assembly, load it into armvm, stub out peripheral registers as host functions, and run automated tests on a CI server — no evaluation board required.
+
+### Reproducible Portable Bytecode Distribution
+Ship an `.bin` bytecode blob that runs identically on every supported host. The compact "ORCA" binary format is self-describing and deterministic, making it straightforward to checksum, cache, or version alongside application assets.
+
+### Security Research & Fuzzing
+Fuzz ARM binary code paths in a fully-isolated, in-process sandbox. The VM's configurable memory sizes and register-level introspection make it easy to inject inputs, catch crashes, and inspect state without spinning up a separate OS process.
+
+### UI-Managed VM Environments (paired with [orion-ui](https://github.com/corepunch/orion-ui))
+Connect armvm instances to **orion-ui** to get a dedicated graphical interface for creating, running, inspecting, and debugging VMs. A visual register/memory inspector, step-by-step execution, and multi-VM management panel would make armvm suitable for teaching environments, game modding toolchains, and embedded development workflows.
+
+---
+
+## Roadmap
+
+The items below would expand armvm's utility across the use cases above.
+
+### Near-term
+- [ ] **Thumb / Thumb-2 instruction set** — decode and execute the 16/32-bit Thumb encoding so that GCC and modern Clang outputs work without `-marm` flags
+- [ ] **VFP floating-point** — basic single/double-precision arithmetic to support numerical code and C `float`/`double` values
+- [ ] **Snapshot & restore** — serialize full VM state (registers + memory) to a buffer so execution can be paused, migrated, or replayed
+- [ ] **Step / breakpoint API** — expose `avm_step()` and `avm_breakpoint()` in the high-level API to support debuggers and orion-ui integration
+
+### Medium-term
+- [ ] **Multiple concurrent VM instances** — thread-safe state so several VMs can run in parallel within the same host process
+- [ ] **Inter-VM messaging** — lightweight channels so cooperating VMs can exchange data without going through the host
+- [ ] **Filesystem & network sandboxing helpers** — optional host-function packs that give the VM controlled access to files and sockets, similar to WASI
+- [ ] **orion-ui integration** — a first-party adapter that exposes armvm's API to orion-ui for graphical VM management, register inspection, and live disassembly
+
+### Long-term
+- [ ] **AArch64 (ARM64) guest support** — execute 64-bit ARM code in the same embeddable VM model
+- [ ] **JIT compilation back-end** — translate hot bytecode paths to native host instructions for performance-critical workloads
+- [ ] **WebAssembly target** — compile the VM itself to WASM so ARM32 code can run in a browser with no native install
+- [ ] **Profiling & tracing API** — instruction-level counters and call-graph tracing for performance analysis of guest code
+
+---
+
 ## License
 
 This project is licensed under the **GNU General Public License v3.0**. See the LICENSE file for complete details.
