@@ -44,7 +44,7 @@ static int host_print_string(avm_State *L) {
     DWORD len = 0;
     while (len < max_len && base[len] != '\0') len++;
     if (len == max_len) return 0;                   /* not NUL-terminated   */
-    fwrite(base, 1, len, stdout);
+    if (fwrite(base, 1, len, stdout) != len) return 0;
     return 0; /* void — no return value */
 }
 

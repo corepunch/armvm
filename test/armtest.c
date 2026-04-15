@@ -172,6 +172,8 @@ void testFloatRoundtrip() {
     }
 
     // Also verify a negative float.
+    // avm_pushnumber always writes to r0 (register index 1), so each call
+    // overwrites the previous value and avm_tonumber(L, 1) reads the latest.
     float neg = -1.0f;
     avm_pushnumber(L, neg);
     float neg_out = avm_tonumber(L, 1);
