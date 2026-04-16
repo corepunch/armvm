@@ -273,21 +273,21 @@ int main(void) {
 
 #### API Reference
 
-| Function | Lua equivalent | Description |
+| Function | Description |
 |---|---|---|
-| `avm_newstate(stack, heap)` | `luaL_newstate()` | Allocate a new VM state |
-| `avm_close(S)` | `lua_close()` | Destroy state and free memory |
-| `avm_register(S, name, fn)` | `lua_register()` | Bind a C function to an assembly symbol |
-| `avm_loadbuffer(S, src, len)` | `luaL_loadbuffer()` | Compile & load ARM assembly source |
-| `avm_call(S, pc)` | `lua_call()` | Execute loaded code from given PC |
-| `avm_tointeger(S, idx)` | `lua_tointeger()` | Read register `idx` (1=r0) as `int` |
+| `avm_newstate(stack, heap)` | Allocate a new VM state |
+| `avm_close(S)` | Destroy state and free memory |
+| `avm_register(S, name, fn)` | Bind a C function to an assembly symbol |
+| `avm_loadbuffer(S, src, len)` | Compile & load ARM assembly source |
+| `avm_call(S, pc)` | Execute loaded code from given PC |
+| `avm_tointeger(S, idx)` | Read register `idx` (1=r0) as `int` |
 | `avm_touinteger(S, idx)` | — | Read register `idx` as `unsigned int` |
-| `avm_tonumber(S, idx)` | `lua_tonumber()` | Read register `idx` as `float` |
-| `avm_tostring(S, idx)` | `lua_tostring()` | Register value → pointer into VM memory |
-| `avm_toboolean(S, idx)` | `lua_toboolean()` | Non-zero register → true |
-| `avm_pushinteger(S, n)` | `lua_pushinteger()` | Write `int` return value to r0 |
-| `avm_pushnumber(S, n)` | `lua_pushnumber()` | Write `float` return value to r0 |
-| `avm_pushboolean(S, b)` | `lua_pushboolean()` | Write boolean (0/1) to r0 |
+| `avm_tonumber(S, idx)` | Read register `idx` as `float` |
+| `avm_tostring(S, idx)` | Register value → pointer into VM memory |
+| `avm_toboolean(S, idx)` | Non-zero register → true |
+| `avm_pushinteger(S, n)` | Write `int` return value to r0 |
+| `avm_pushnumber(S, n)` | Write `float` return value to r0 |
+| `avm_pushboolean(S, b)` | Write boolean (0/1) to r0 |
 
 Register indices in `avm_to*` / `avm_push*` are **1-indexed**: index 1 maps to
 r0, index 2 maps to r1, etc., matching the ARM calling convention where r0
