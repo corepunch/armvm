@@ -274,7 +274,7 @@ int main(void) {
 #### API Reference
 
 | Function | Description |
-|---|---|---|
+|---|---|
 | `avm_newstate(stack, heap)` | Allocate a new VM state |
 | `avm_close(S)` | Destroy state and free memory |
 | `avm_register(S, name, fn)` | Bind a C function to an assembly symbol |
