@@ -222,25 +222,25 @@ modelled after the Lua C API.
 /* ---- Host functions (avm_CFunction signature) ---- */
 
 /* strlen(const char *s) -> int  — r0 = pointer to string in VM memory */
-static int host_strlen(avm_State *L) {
-    avm_pushinteger(L, (int)strlen(avm_tostring(L, 1)));
+static int host_strlen(avm_State *S) {
+    avm_pushinteger(S, (int)strlen(avm_tostring(S, 1)));
     return 1; /* one return value placed in r0 */
 }
 
 /* puts(const char *s) — prints and returns void */
-static int host_puts(avm_State *L) {
-    puts(avm_tostring(L, 1));
+static int host_puts(avm_State *S) {
+    puts(avm_tostring(S, 1));
     return 0;
 }
 
 int main(void) {
     /* 1. Create state with 64 KB stack and 64 KB heap */
-    avm_State *L = avm_newstate(64 * 1024, 64 * 1024);
+    avm_State *S = avm_newstate(64 * 1024, 64 * 1024);
 
     /* 2. Register host functions — must happen BEFORE avm_loadbuffer()
      *    so the assembler can resolve "bl _strlen" / "bl _puts"        */
-    avm_register(L, "strlen", host_strlen);
-    avm_register(L, "puts",   host_puts);
+    avm_register(S, "strlen", host_strlen);
+    avm_register(S, "puts",   host_puts);
 
     /* 3. Compile and load ARM assembly source */
     const char *src =
@@ -249,9 +249,9 @@ int main(void) {
         "    bl _puts\n"       /* prints the string whose address is in r0 */
         "    bx lr\n";
 
-    if (avm_loadbuffer(L, src, strlen(src)) != 0) {
+    if (avm_loadbuffer(S, src, strlen(src)) != 0) {
         fprintf(stderr, "compilation failed\n");
-        avm_close(L);
+        avm_close(S);
         return 1;
     }
 
@@ -260,13 +260,13 @@ int main(void) {
     /*  that r0 is read with avm_tointeger and written with avm_pushinteger) */
 
     /* 5. Execute from the _main entry point */
-    avm_call(L, L->entry_point);
+    avm_call(S, S->entry_point);
 
     /* 6. Read return value from r0 (register index 1) */
-    int result = avm_tointeger(L, 1);
+    int result = avm_tointeger(S, 1);
 
     /* 7. Destroy state */
-    avm_close(L);
+    avm_close(S);
     return result;
 }
 ```
@@ -276,24 +276,24 @@ int main(void) {
 | Function | Lua equivalent | Description |
 |---|---|---|
 | `avm_newstate(stack, heap)` | `luaL_newstate()` | Allocate a new VM state |
-| `avm_close(L)` | `lua_close()` | Destroy state and free memory |
-| `avm_register(L, name, fn)` | `lua_register()` | Bind a C function to an assembly symbol |
-| `avm_loadbuffer(L, src, len)` | `luaL_loadbuffer()` | Compile & load ARM assembly source |
-| `avm_call(L, pc)` | `lua_call()` | Execute loaded code from given PC |
-| `avm_tointeger(L, idx)` | `lua_tointeger()` | Read register `idx` (1=r0) as `int` |
-| `avm_touinteger(L, idx)` | — | Read register `idx` as `unsigned int` |
-| `avm_tonumber(L, idx)` | `lua_tonumber()` | Read register `idx` as `float` |
-| `avm_tostring(L, idx)` | `lua_tostring()` | Register value → pointer into VM memory |
-| `avm_toboolean(L, idx)` | `lua_toboolean()` | Non-zero register → true |
-| `avm_pushinteger(L, n)` | `lua_pushinteger()` | Write `int` return value to r0 |
-| `avm_pushnumber(L, n)` | `lua_pushnumber()` | Write `float` return value to r0 |
-| `avm_pushboolean(L, b)` | `lua_pushboolean()` | Write boolean (0/1) to r0 |
+| `avm_close(S)` | `lua_close()` | Destroy state and free memory |
+| `avm_register(S, name, fn)` | `lua_register()` | Bind a C function to an assembly symbol |
+| `avm_loadbuffer(S, src, len)` | `luaL_loadbuffer()` | Compile & load ARM assembly source |
+| `avm_call(S, pc)` | `lua_call()` | Execute loaded code from given PC |
+| `avm_tointeger(S, idx)` | `lua_tointeger()` | Read register `idx` (1=r0) as `int` |
+| `avm_touinteger(S, idx)` | — | Read register `idx` as `unsigned int` |
+| `avm_tonumber(S, idx)` | `lua_tonumber()` | Read register `idx` as `float` |
+| `avm_tostring(S, idx)` | `lua_tostring()` | Register value → pointer into VM memory |
+| `avm_toboolean(S, idx)` | `lua_toboolean()` | Non-zero register → true |
+| `avm_pushinteger(S, n)` | `lua_pushinteger()` | Write `int` return value to r0 |
+| `avm_pushnumber(S, n)` | `lua_pushnumber()` | Write `float` return value to r0 |
+| `avm_pushboolean(S, b)` | `lua_pushboolean()` | Write boolean (0/1) to r0 |
 
 Register indices in `avm_to*` / `avm_push*` are **1-indexed**: index 1 maps to
 r0, index 2 maps to r1, etc., matching the ARM calling convention where r0
 holds the first argument and the return value.
 
-After `avm_loadbuffer()` succeeds, `L->entry_point` contains the byte offset
+After `avm_loadbuffer()` succeeds, `S->entry_point` contains the byte offset
 of the `_main` label, ready to pass to `avm_call()`.
 
 ### Low-level API (backward-compatible)
